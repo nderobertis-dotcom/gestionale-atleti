@@ -1,0 +1,4323 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestionale Atleti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ============================================================
+   VARIABILI E RESET
+   ============================================================ */
+:root {
+  --bg:        #f5f6fa;
+  --bg2:       #ffffff;
+  --bg3:       #eef0f5;
+  --border:    #dde1ec;
+  --accent:    #1a9e6a;
+  --accent2:   #158a5a;
+  --danger:    #c0392b;
+  --warning:   #d68a1a;
+  --text:      #1a1d2e;
+  --text2:     #4a5068;
+  --text3:     #8a90a8;
+  --sidebar-w: 240px;
+  --header-h:  56px;
+  --radius:    8px;
+  --shadow:    0 2px 12px rgba(0,0,0,0.08);
+  --font:      'DM Sans', sans-serif;
+  --mono:      'DM Mono', monospace;
+}
+
+[data-theme='dark'] {
+  --bg:        #0f1117;
+  --bg2:       #161b27;
+  --bg3:       #1e2535;
+  --border:    #2a3347;
+  --accent:    #3ecf8e;
+  --accent2:   #2db77a;
+  --danger:    #e05c5c;
+  --warning:   #e8a84a;
+  --text:      #e8eaf0;
+  --text2:     #8b93a7;
+  --text3:     #5a6278;
+  --shadow:    0 2px 12px rgba(0,0,0,0.4);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: var(--font); font-size: 14px; }
+ul { list-style: none; }
+
+/* ============================================================
+   LAYOUT PRINCIPALE
+   ============================================================ */
+#app { display: flex; height: 100vh; overflow: hidden; }
+
+/* SIDEBAR */
+#sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+  z-index: 100;
+}
+#sidebar-logo {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.3px;
+}
+#sidebar-logo .logo-icon {
+  width: 28px; height: 28px;
+  background: var(--accent);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+#sidebar-society {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+#sidebar-society select {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+#sidebar-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+.nav-section { padding: 16px 16px 4px; font-size: 10px; font-weight: 600; letter-spacing: 1px; color: var(--text3); text-transform: uppercase; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  border-radius: 0;
+  transition: all 0.15s;
+  border-left: 2px solid transparent;
+}
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: rgba(62,207,142,0.08); color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
+.nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-family: var(--mono);
+}
+#sidebar-user {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.user-avatar {
+  width: 32px; height: 32px;
+  background: var(--bg3);
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  flex-shrink: 0;
+}
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-role { font-size: 11px; color: var(--text3); text-transform: capitalize; }
+.btn-logout { background: none; color: var(--text3); font-size: 18px; padding: 4px; border-radius: 4px; transition: color 0.15s; }
+.btn-logout:hover { color: var(--danger); }
+
+/* MAIN */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#topbar {
+  height: var(--header-h);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+#topbar-title { font-size: 16px; font-weight: 600; flex: 1; }
+#topbar-actions { display: flex; gap: 8px; }
+#content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* HAMBURGER (mobile) */
+#menu-toggle {
+  display: none;
+  background: none;
+  color: var(--text);
+  font-size: 22px;
+  padding: 4px 8px;
+}
+
+/* ============================================================
+   SCHERMATA LOGIN
+   ============================================================ */
+#login-screen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999;
+}
+.login-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: var(--shadow);
+}
+.login-logo {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 32px;
+}
+.login-logo .logo-icon {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.login-logo span { font-size: 18px; font-weight: 600; }
+.login-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.login-box p { color: var(--text2); font-size: 13px; margin-bottom: 28px; }
+.login-error {
+  background: rgba(224,92,92,0.12);
+  border: 1px solid rgba(224,92,92,0.3);
+  color: var(--danger);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+/* ============================================================
+   COMPONENTI FORM
+   ============================================================ */
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 6px; letter-spacing: 0.3px; }
+.field input, .field select, .field textarea {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  transition: border-color 0.15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.field select option { background: var(--bg3); }
+.field textarea { resize: vertical; min-height: 80px; }
+
+/* ============================================================
+   BOTTONI
+   ============================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 13px; font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #0f1117; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger { background: rgba(224,92,92,0.12); color: var(--danger); border: 1px solid rgba(224,92,92,0.3); }
+.btn-danger:hover { background: rgba(224,92,92,0.2); }
+.btn-full { width: 100%; justify-content: center; padding: 10px 16px; font-size: 14px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ============================================================
+   CARDS E LAYOUT CONTENUTO
+   ============================================================ */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.card-title { font-size: 14px; font-weight: 600; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.stat-label { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-value { font-size: 28px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+.stat-value.accent { color: var(--accent); }
+.stat-value.warning { color: var(--warning); }
+.stat-value.danger { color: var(--danger); }
+.stat-sub { font-size: 12px; color: var(--text3); }
+
+/* ============================================================
+   TABELLE
+   ============================================================ */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+tbody td { padding: 10px 12px; font-size: 13px; }
+tbody tr:last-child { border-bottom: none; }
+
+/* BADGE */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px; font-weight: 500;
+  font-family: var(--mono);
+}
+.badge-green { background: rgba(62,207,142,0.12); color: var(--accent); }
+.badge-red { background: rgba(224,92,92,0.12); color: var(--danger); }
+.badge-yellow { background: rgba(232,168,74,0.12); color: var(--warning); }
+.badge-gray { background: rgba(255,255,255,0.06); color: var(--text2); }
+
+/* ============================================================
+   FILTRI E RICERCA
+   ============================================================ */
+.toolbar {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search-input {
+  flex: 1; min-width: 200px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.search-input:focus { outline: none; border-color: var(--accent); }
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 500;
+  padding: 16px;
+  display: none;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: var(--bg2);
+}
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-close { background: none; color: var(--text3); font-size: 20px; padding: 2px 6px; border-radius: 4px; transition: color 0.15s; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 20px 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ============================================================
+   ALERT / TOAST
+   ============================================================ */
+#toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: 999;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 10px;
+  min-width: 280px;
+  animation: slideIn 0.2s ease;
+}
+.toast.success { border-left: 3px solid var(--accent); }
+.toast.error { border-left: 3px solid var(--danger); }
+.toast.warning { border-left: 3px solid var(--warning); }
+@keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text3);
+}
+.empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* ============================================================
+   LOADING
+   ============================================================ */
+.loading {
+  display: flex; align-items: center; justify-content: center;
+  padding: 48px;
+  color: var(--text3);
+  gap: 10px;
+}
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   RESPONSIVE MOBILE
+   ============================================================ */
+@media (max-width: 768px) {
+  #sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    transform: translateX(-100%);
+  }
+  #sidebar.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.5); }
+  #menu-toggle { display: block; }
+  #content { padding: 16px; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .modal { max-width: 100%; }
+}
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .search-input { min-width: unset; }
+}
+
+/* ============================================================
+   SEZIONI SPECIFICHE (placeholder per sviluppo)
+   ============================================================ */
+.section { display: none; }
+.section.active { display: block; }
+
+@media print {
+  #sidebar, #topbar, .modal-overlay, .scheda-overlay { display: none !important; }
+}
+.page-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.page-sub { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
+
+/* STEP INDICATOR */
+.step-dot {
+  width:28px;height:28px;border-radius:50%;
+  background:var(--bg3);border:2px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:600;color:var(--text3);
+  flex-shrink:0;
+}
+.step-dot.active { background:var(--accent);border-color:var(--accent);color:#fff; }
+.step-dot.done { background:var(--bg3);border-color:var(--accent);color:var(--accent); }
+.step-line {
+  flex:1;height:2px;background:var(--border);margin-top:13px;
+}
+.step-line.done { background:var(--accent); }
+
+
+/* SCHEDA ATLETA */
+.scheda-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 500;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+.scheda-overlay.open { display: flex; }
+.scheda-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 760px;
+  margin: auto;
+  box-shadow: var(--shadow);
+}
+.scheda-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.scheda-avatar {
+  width: 56px; height: 56px;
+  background: var(--bg3);
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; color: var(--accent);
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.scheda-info { flex: 1; }
+.scheda-nome { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.scheda-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.scheda-close {
+  background: none; color: var(--text3); font-size: 22px;
+  padding: 4px 8px; border-radius: 4px; cursor: pointer; border: none;
+  transition: color 0.15s;
+}
+.scheda-close:hover { color: var(--danger); }
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  gap: 0;
+}
+.tab-btn {
+  padding: 12px 16px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text2);
+  background: none; border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { padding: 24px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.info-row {
+  display: contents;
+}
+.info-label {
+  padding: 10px 14px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.info-value {
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+.info-label:last-of-type, .info-value:last-of-type { border-bottom: none; }
+.sezione-titolo-scheda {
+  font-size: 11px; font-weight: 600;
+  color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px;
+  margin: 20px 0 10px;
+}
+.doc-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.doc-icon { font-size: 24px; flex-shrink: 0; }
+.doc-info { flex: 1; }
+.doc-tipo { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+.doc-dettaglio { font-size: 13px; margin-top: 2px; }
+.doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+</style>
+</head>
+<body>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="logo-icon">🏃</div>
+      <span>Gestionale Atleti</span>
+    </div>
+    <h2>Accedi</h2>
+    <p>Inserisci le tue credenziali per continuare</p>
+    <div class="login-error" id="login-error"></div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="nome@esempio.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-full" id="btn-login">Accedi</button>
+  </div>
+</div>
+
+<!-- APP PRINCIPALE -->
+<div id="app" style="display:none">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div id="sidebar-logo">
+      <div class="logo-icon">🏃</div>
+      <span>Gestionale Atleti</span>
+    </div>
+
+    <div id="sidebar-society">
+      <select id="select-societa">
+        <option value="">Tutte le società</option>
+      </select>
+    </div>
+
+    <div id="sidebar-nav">
+      <!-- Popolato da JS in base al ruolo -->
+    </div>
+
+    <div id="sidebar-user">
+      <div class="user-avatar" id="user-avatar">N</div>
+      <div class="user-info">
+        <div class="user-name" id="user-name">—</div>
+        <div class="user-role" id="user-role">—</div>
+      </div>
+      <button class="btn-logout" id="btn-logout" title="Esci">⏻</button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="main">
+    <div id="topbar">
+      <button id="menu-toggle">☰</button>
+      <div id="topbar-title">Dashboard</div>
+      <div id="topbar-actions">
+      <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
+    </div>
+    </div>
+    <div id="content">
+
+      <!-- DASHBOARD -->
+      <div class="section active" id="section-dashboard">
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub" id="dashboard-sub">Benvenuto nel gestionale atleti</div>
+        <div class="stats-grid" id="stats-grid">
+          <div class="loading"><div class="spinner"></div> Caricamento...</div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⚠️ Certificati in scadenza (60 giorni)</div>
+          </div>
+          <div id="table-certificati">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">💳 Rate non pagate</div>
+          </div>
+          <div id="table-rate">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ATLETI -->
+      <div class="section" id="section-atleti">
+        <div class="page-title">Atleti</div>
+        <div class="page-sub">Anagrafica atleti tesserati</div>
+        <div class="toolbar">
+          <input type="text" class="search-input" id="search-atleti" placeholder="🔍  Cerca per nome, cognome, codice fiscale...">
+          <button class="btn btn-secondary" id="btn-filter-atleti">Filtri</button>
+          <button class="btn btn-primary" id="btn-nuovo-atleta">+ Nuovo atleta</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cognome e Nome</th>
+                  <th>Data nascita</th>
+                  <th>Tipo</th>
+                  <th>Società</th>
+                  <th>Stato</th>
+                  <th>Certificato</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-atleti">
+                <tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- GENITORI -->
+      <div class="section" id="section-genitori">
+        <div class="page-title">Genitori / Tutori</div>
+        <div class="page-sub">Referenti legali degli atleti minorenni</div>
+        <div class="toolbar">
+          <input type="text" class="search-input" id="search-genitori" placeholder="🔍  Cerca per nome o codice fiscale...">
+          <button class="btn btn-primary" id="btn-nuovo-genitore">+ Nuovo genitore</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cognome e Nome</th>
+                  <th>Codice Fiscale</th>
+                  <th>Telefono</th>
+                  <th>Email</th>
+                  <th>Figli iscritti</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-genitori">
+                <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRUPPI -->
+      <div class="section" id="section-gruppi">
+        <div class="page-title">Gruppi / Squadre</div>
+        <div class="page-sub">Gestione gruppi della stagione corrente</div>
+        <div class="toolbar">
+          <input type="text" class="search-input" id="search-gruppi" placeholder="🔍  Cerca gruppo...">
+          <button class="btn btn-primary" id="btn-nuovo-gruppo">+ Nuovo gruppo</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Tipo</th>
+                  <th>Società</th>
+                  <th>Con quota</th>
+                  <th>Atleti</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-gruppi">
+                <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ISCRIZIONI -->
+      <div class="section" id="section-iscrizioni">
+        <div class="page-title">Iscrizioni</div>
+        <div class="page-sub">Gestione iscrizioni stagione corrente</div>
+        <div class="toolbar">
+          <input type="text" class="search-input" id="search-iscrizioni" placeholder="🔍  Cerca atleta...">
+          <button class="btn btn-primary" id="btn-nuova-iscrizione">+ Nuova iscrizione</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atleta</th>
+                  <th>Stagione</th>
+                  <th>Tariffa</th>
+                  <th>Intestato a</th>
+                  <th>Stato</th>
+                  <th>Data</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-iscrizioni">
+                <tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGAMENTI -->
+      <div class="section" id="section-pagamenti">
+        <div class="page-title">Pagamenti</div>
+        <div class="page-sub">Registro pagamenti e rate</div>
+        <div class="toolbar">
+          <input type="text" class="search-input" id="search-pagamenti" placeholder="🔍  Cerca atleta o ricevuta...">
+          <select class="btn btn-secondary" id="filter-pagamento-stato" style="padding:8px 12px">
+            <option value="">Tutti</option>
+            <option value="false">Non pagati</option>
+            <option value="true">Pagati</option>
+          </select>
+          <button class="btn btn-primary" id="btn-nuovo-pagamento">+ Registra pagamento</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atleta</th>
+                  <th>Tipo</th>
+                  <th>Importo</th>
+                  <th>Scadenza</th>
+                  <th>Metodo</th>
+                  <th>Stato</th>
+                  <th>Azione</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-pagamenti">
+                <tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOCUMENTI -->
+      <div class="section" id="section-documenti">
+        <div class="page-title">Documenti</div>
+        <div class="page-sub">Gestione documenti e certificati medici</div>
+        <div class="toolbar">
+          <input type="text" class="search-input" id="search-documenti" placeholder="🔍  Cerca atleta...">
+          <select class="btn btn-secondary" id="filter-doc-tipo" style="padding:8px 12px">
+            <option value="">Tutti i tipi</option>
+            <option value="certificato_medico">Certificati medici</option>
+            <option value="carta_identita">Carte d'identità</option>
+            <option value="passaporto">Passaporti</option>
+          </select>
+          <button class="btn btn-primary" id="btn-nuovo-documento">+ Carica documento</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atleta</th>
+                  <th>Tipo</th>
+                  <th>Scadenza</th>
+                  <th>Stato</th>
+                  <th>File</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-documenti">
+                <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SOCIETA -->
+      <div class="section" id="section-societa">
+        <div class="page-title">Società</div>
+        <div class="page-sub">Configurazione dati societari e fiscali</div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Tipo</th>
+                  <th>Codice Fiscale</th>
+                  <th>Comune</th>
+                  <th>Telefono</th>
+                  <th>Email</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-societa">
+                <tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TARIFFE -->
+      <div class="section" id="section-tariffe">
+        <div class="page-title">Tariffe</div>
+        <div class="page-sub">Tariffe standard per stagione</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-nuova-tariffa">+ Nuova tariffa</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Società</th>
+                  <th>Stagione</th>
+                  <th>Iscrizione</th>
+                  <th>Rata</th>
+                  <th>Frequenza</th>
+                  <th>N. rate</th>
+                  <th>Totale</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-tariffe">
+                <tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- UTENTI (solo admin) -->
+      <div class="section" id="section-utenti">
+        <div class="page-title">Utenti</div>
+        <div class="page-sub">Gestione accessi al sistema</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-nuovo-utente">+ Invita utente</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Email</th>
+                  <th>Ruolo</th>
+                  <th>Società</th>
+                  <th>Stato</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-utenti">
+                <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROFILO -->
+      <div class="section" id="section-profilo">
+        <div class="page-title">Il mio profilo</div>
+        <div class="page-sub">Gestisci i tuoi dati personali e la password</div>
+        <div class="card" style="max-width:480px">
+          <div class="field"><label>Nome</label><input type="text" id="profilo-nome"></div>
+          <div class="field"><label>Cognome</label><input type="text" id="profilo-cognome"></div>
+          <div class="field"><label>Email</label><input type="email" id="profilo-email" disabled></div>
+          <div class="field"><label>Ruolo</label><input type="text" id="profilo-ruolo" disabled></div>
+          <button class="btn btn-primary" id="btn-salva-profilo">Salva modifiche</button>
+        </div>
+        <div class="card" style="max-width:480px; margin-top:16px">
+          <div class="card-header"><div class="card-title">Cambia password</div></div>
+          <div class="field"><label>Nuova password</label><input type="password" id="profilo-pw1"></div>
+          <div class="field"><label>Conferma password</label><input type="password" id="profilo-pw2"></div>
+          <button class="btn btn-secondary" id="btn-cambia-pw">Aggiorna password</button>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+// ============================================================
+// CONFIGURAZIONE SUPABASE
+// ============================================================
+const SUPABASE_URL = 'https://dfppifjbohdslfqggkhi.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmcHBpZmpib2hkc2xmcWdna2hpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MzE3OTIsImV4cCI6MjA5NDEwNzc5Mn0.u_nu4ixeEetWVua6jEfoUBRNqtrF_vLSakNc2lZ-xlA';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+// STATO GLOBALE
+// ============================================================
+let currentUser = null;
+let currentProfilo = null;
+let currentSocietaId = null;
+let currentStagioneId = null;
+
+// ============================================================
+// MENU PER RUOLO
+// ============================================================
+const MENU = {
+  amministratore: [
+    { section: 'dashboard', icon: '◉', label: 'Dashboard' },
+    { section: 'atleti',    icon: '👤', label: 'Atleti' },
+    { section: 'genitori',  icon: '👨‍👩‍👧', label: 'Genitori' },
+    { section: 'gruppi',    icon: '👥', label: 'Gruppi / Squadre' },
+    { section: 'iscrizioni',icon: '📋', label: 'Iscrizioni' },
+    { section: 'pagamenti', icon: '💳', label: 'Pagamenti' },
+    { section: 'documenti', icon: '📄', label: 'Documenti' },
+    { section: 'tariffe',   icon: '🏷️', label: 'Tariffe' },
+    { section: 'societa',   icon: '🏢', label: 'Società' },
+    { section: 'utenti',    icon: '🔐', label: 'Utenti' },
+    { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
+  ],
+  segreteria: [
+    { section: 'dashboard', icon: '◉', label: 'Dashboard' },
+    { section: 'atleti',    icon: '👤', label: 'Atleti' },
+    { section: 'genitori',  icon: '👨‍👩‍👧', label: 'Genitori' },
+    { section: 'gruppi',    icon: '👥', label: 'Gruppi / Squadre' },
+    { section: 'iscrizioni',icon: '📋', label: 'Iscrizioni' },
+    { section: 'pagamenti', icon: '💳', label: 'Pagamenti' },
+    { section: 'documenti', icon: '📄', label: 'Documenti' },
+    { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
+  ],
+  allenatore: [
+    { section: 'dashboard', icon: '◉', label: 'Dashboard' },
+    { section: 'atleti',    icon: '👤', label: 'I miei atleti' },
+    { section: 'documenti', icon: '📄', label: 'Certificati' },
+    { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
+  ],
+  genitore: [
+    { section: 'dashboard', icon: '◉', label: 'Dashboard' },
+    { section: 'atleti',    icon: '👤', label: 'I miei figli' },
+    { section: 'pagamenti', icon: '💳', label: 'Pagamenti' },
+    { section: 'documenti', icon: '📄', label: 'Documenti' },
+    { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
+  ],
+};
+
+// ============================================================
+// UTILITA'
+// ============================================================
+function toast(msg, type = 'success') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  const icons = { success: '✓', error: '✕', warning: '⚠' };
+  t.innerHTML = `<span>${icons[type] || '•'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+function formatData(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('it-IT');
+}
+
+function formatEuro(n) {
+  if (n === null || n === undefined) return '—';
+  return '€ ' + Number(n).toFixed(2).replace('.', ',');
+}
+
+function navigateTo(section) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const sec = document.getElementById('section-' + section);
+  if (sec) sec.classList.add('active');
+  const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
+  if (navItem) navItem.classList.add('active');
+  document.getElementById('topbar-title').textContent =
+    MENU[currentProfilo?.ruolo]?.find(m => m.section === section)?.label || section;
+  // Chiudi sidebar su mobile
+  document.getElementById('sidebar').classList.remove('open');
+  // Carica dati sezione
+  loadSection(section);
+}
+
+// ============================================================
+// BUILD MENU
+// ============================================================
+function buildMenu(ruolo) {
+  const nav = document.getElementById('sidebar-nav');
+  nav.innerHTML = '';
+  const items = MENU[ruolo] || [];
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'nav-item';
+    div.dataset.section = item.section;
+    div.innerHTML = `<span class="nav-icon">${item.icon}</span><span>${item.label}</span>`;
+    div.addEventListener('click', () => navigateTo(item.section));
+    nav.appendChild(div);
+  });
+}
+
+// ============================================================
+// CARICA SOCIETA' IN SELECT
+// ============================================================
+async function loadSocieta() {
+  const { data } = await sb.from('societa').select('id, nome').order('nome');
+  const sel = document.getElementById('select-societa');
+  if (data) {
+    data.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.nome;
+      sel.appendChild(opt);
+    });
+  }
+  sel.addEventListener('change', () => {
+    currentSocietaId = sel.value || null;
+    loadSection(getActiveSection());
+  });
+}
+
+function getActiveSection() {
+  const active = document.querySelector('.section.active');
+  return active ? active.id.replace('section-', '') : 'dashboard';
+}
+
+// ============================================================
+// CARICA STAGIONE ATTIVA
+// ============================================================
+async function loadStagione() {
+  const { data } = await sb.from('stagione').select('id, nome').eq('attiva', true).single();
+  if (data) currentStagioneId = data.id;
+}
+
+// ============================================================
+// CARICA SEZIONE
+// ============================================================
+async function loadSection(section) {
+  switch(section) {
+    case 'dashboard':  loadDashboard(); break;
+    case 'atleti':     loadAtleti(); break;
+    case 'genitori':   loadGenitori(); break;
+    case 'gruppi':     loadGruppi(); break;
+    case 'iscrizioni': loadIscrizioni(); break;
+    case 'pagamenti':  loadPagamenti(); break;
+    case 'documenti':  loadDocumenti(); break;
+    case 'tariffe':    loadTariffe(); break;
+    case 'utenti':     loadUtenti(); break;
+    case 'profilo':    loadProfilo(); break;
+    case 'societa':    loadSocietaList(); break;
+  }
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+async function loadDashboard() {
+  document.getElementById('dashboard-sub').textContent =
+    `Benvenuto, ${currentProfilo?.nome} — Stagione ${currentStagioneId ? 'attiva' : 'non configurata'}`;
+
+  // Stats
+  const grid = document.getElementById('stats-grid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const [atleti, iscrizioni, pagamentiScaduti, certScadenza] = await Promise.all([
+    sb.from('atleta').select('id', { count: 'exact', head: true }),
+    sb.from('iscrizione').select('id', { count: 'exact', head: true }).eq('stato', 'attiva'),
+    sb.from('v_rate_non_pagate').select('*', { count: 'exact', head: true }),
+    sb.from('v_certificati_in_scadenza').select('*', { count: 'exact', head: true }),
+  ]);
+
+  grid.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Atleti totali</div>
+      <div class="stat-value accent">${atleti.count ?? '—'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Iscrizioni attive</div>
+      <div class="stat-value">${iscrizioni.count ?? '—'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Rate scadute</div>
+      <div class="stat-value ${pagamentiScaduti.count > 0 ? 'danger' : ''}">${pagamentiScaduti.count ?? '—'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Certificati in scadenza</div>
+      <div class="stat-value ${certScadenza.count > 0 ? 'warning' : ''}">${certScadenza.count ?? '—'}</div>
+    </div>
+  `;
+
+  // Tabella certificati
+  const { data: certs } = await sb.from('v_certificati_in_scadenza').select('*').limit(10);
+  const tcert = document.getElementById('table-certificati');
+  if (!certs || certs.length === 0) {
+    tcert.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Nessun certificato in scadenza nei prossimi 60 giorni</p></div>';
+  } else {
+    tcert.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Cognome</th><th>Nome</th><th>Scadenza</th><th>Giorni rimanenti</th></tr></thead>
+      <tbody>${certs.map(c => `<tr>
+        <td>${c.cognome}</td><td>${c.nome}</td>
+        <td>${formatData(c.data_scadenza)}</td>
+        <td><span class="badge ${c.giorni_alla_scadenza <= 15 ? 'badge-red' : 'badge-yellow'}">${c.giorni_alla_scadenza} gg</span></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  // Tabella rate
+  const { data: rate } = await sb.from('v_rate_non_pagate').select('*').limit(10);
+  const trate = document.getElementById('table-rate');
+  if (!rate || rate.length === 0) {
+    trate.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Nessuna rata scaduta</p></div>';
+  } else {
+    trate.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Atleta</th><th>Intestato a</th><th>Importo</th><th>Scadenza</th><th>Ritardo</th></tr></thead>
+      <tbody>${rate.map(r => `<tr>
+        <td>${r.cognome} ${r.nome}</td>
+        <td>${r.intestato_nome}</td>
+        <td>${formatEuro(r.importo)}</td>
+        <td>${formatData(r.data_scadenza)}</td>
+        <td><span class="badge badge-red">${r.giorni_ritardo} gg</span></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+}
+
+// ============================================================
+// ATLETI
+// ============================================================
+async function loadAtleti() {
+  const search = document.getElementById('search-atleti')?.value || '';
+  let { data, error } = await sb.from('atleta')
+    .select('id, cognome, nome, data_nascita, maggiorenne, codice_fiscale, foto_url, iscrizione(stato, stagione_id, iscrizione_gruppo(gruppo(societa(nome)))), documento(tipo, data_scadenza)')
+    .order('cognome');
+
+  if (error || !data) {
+    document.getElementById('tbody-atleti').innerHTML = '<tr><td colspan="7">Errore caricamento</td></tr>';
+    return;
+  }
+
+  if (search) {
+    const s = search.toLowerCase();
+    data = data.filter(a =>
+      a.cognome?.toLowerCase().includes(s) ||
+      a.nome?.toLowerCase().includes(s) ||
+      a.codice_fiscale?.toLowerCase().includes(s)
+    );
+  }
+
+  const tbody = document.getElementById('tbody-atleti');
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👤</div><p>Nessun atleta trovato</p></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(a => {
+    let societaNome = '—';
+    let statoIscrizione = '—';
+    if (a.iscrizione && a.iscrizione.length > 0) {
+      const isc = a.iscrizione.find(i => i.stagione_id === currentStagioneId) || a.iscrizione[0];
+      statoIscrizione = isc.stato || '—';
+      if (isc.iscrizione_gruppo && isc.iscrizione_gruppo.length > 0) {
+        const soc = isc.iscrizione_gruppo[0]?.gruppo?.societa?.nome;
+        if (soc) societaNome = soc;
+      }
+    }
+    const statoClass = statoIscrizione === 'attiva' ? 'badge-green' : statoIscrizione === 'sospesa' ? 'badge-yellow' : 'badge-gray';
+    const eta = a.data_nascita ? Math.floor((Date.now() - new Date(a.data_nascita)) / 31557600000) : 99;
+    const isMin = eta < 18;
+    const avatarStyle = a.foto_url
+      ? 'background-image:url(' + a.foto_url + ');background-size:cover;background-position:center;'
+      : 'background:var(--bg3);';
+    const avatarContent = a.foto_url ? '' : (a.cognome || '?').charAt(0).toUpperCase();
+
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:34px;height:34px;border-radius:50%;border:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--accent);${avatarStyle}">${avatarContent}</div>
+          <div>
+            <strong>${a.cognome || ''} ${a.nome || ''}</strong><br>
+            <small style="color:var(--text3);font-family:var(--mono)">${a.codice_fiscale || '—'}</small>
+          </div>
+        </div>
+      </td>
+      <td>${formatData(a.data_nascita)}</td>
+      <td><span class="badge ${isMin ? 'badge-green' : 'badge-gray'}">${isMin ? 'Minorenne' : 'Maggiorenne'}</span></td>
+      <td>${societaNome !== '—' ? '<span class="badge badge-gray">' + societaNome + '</span>' : '<span style="color:var(--text3)">—</span>'}</td>
+      <td>${statoIscrizione !== '—' ? '<span class="badge ' + statoClass + '">' + statoIscrizione + '</span>' : '<span style="color:var(--text3)">—</span>'}</td>
+      <td>${(() => {
+        const cert = (a.documento || []).find(d => d.tipo === 'certificato_medico');
+        if (!cert || !cert.data_scadenza) return '<span style="color:var(--text3)">—</span>';
+        const parti = cert.data_scadenza.split('-');
+        const scad = new Date(parseInt(parti[0]), parseInt(parti[1])-1, parseInt(parti[2]));
+        const giorni = Math.round((scad - new Date()) / 86400000);
+        if (giorni < 0) return '<span class="badge badge-red">Scaduto</span>';
+        if (giorni <= 30) return '<span class="badge badge-red">' + giorni + ' gg</span>';
+        if (giorni <= 60) return '<span class="badge badge-yellow">' + giorni + ' gg</span>';
+        return '<span class="badge badge-green">Valido</span>';
+      })()}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="apriAtleta('${a.id}')">Apri</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function apriAtleta(id) {
+  const { data: a } = await sb.from('atleta').select('cognome, nome').eq('id', id).single();
+  if (a) apriSchedaAtleta(id, a.cognome + ' ' + a.nome);
+}
+
+// ============================================================
+// GENITORI
+// ============================================================
+async function loadGenitori() {
+  const { data } = await sb.from('genitore').select('*').order('cognome');
+  const tbody = document.getElementById('tbody-genitori');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👨‍👩‍👧</div><p>Nessun genitore registrato</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(g => `<tr>
+    <td><strong>${g.cognome} ${g.nome}</strong></td>
+    <td style="font-family:var(--mono)">${g.codice_fiscale || '—'}</td>
+    <td>${g.telefono || '—'}</td>
+    <td>${g.email || '—'}</td>
+    <td>—</td>
+    <td><button class="btn btn-sm btn-secondary">Apri</button></td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// GRUPPI
+// ============================================================
+async function loadGruppi() {
+  let query = sb.from('gruppo')
+    .select('id, nome, tipo, con_quota, note, societa(nome)')
+    .order('nome');
+  if (currentSocietaId) query = query.eq('societa_id', currentSocietaId);
+  if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
+
+  const { data } = await query;
+  const tbody = document.getElementById('tbody-gruppi');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👥</div><p>Nessun gruppo configurato. Creane uno con il bottone "+ Nuovo gruppo".</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(g => {
+    const nAtleti = '—';
+    return `<tr>
+      <td><strong>${g.nome}</strong>${g.note ? '<br><small style="color:var(--text3)">' + g.note + '</small>' : ''}</td>
+      <td><span class="badge badge-gray">${g.tipo}</span></td>
+      <td>${g.societa?.nome || '—'}</td>
+      <td>${g.con_quota ? '<span class="badge badge-yellow">Sì</span>' : '<span class="badge badge-gray">No</span>'}</td>
+      <td><span style="color:var(--text3)">${nAtleti}</span></td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="apriModalAssegna('${g.id}')">+ Atleta</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// ISCRIZIONI
+// ============================================================
+async function loadIscrizioni() {
+  let query = sb.from('iscrizione')
+    .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome)')
+    .order('data_iscrizione', { ascending: false });
+  if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
+
+  const { data } = await query;
+  const tbody = document.getElementById('tbody-iscrizioni');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessuna iscrizione trovata</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(i => `<tr>
+    <td><strong>${i.atleta?.cognome || ''} ${i.atleta?.nome || ''}</strong></td>
+    <td>${i.stagione?.nome || '—'}</td>
+    <td>${i.tariffa?.nome ? '<span class="badge badge-gray">' + i.tariffa.nome + '</span>' : '<span style="color:var(--text3)">Non assegnata</span>'}</td>
+    <td>${i.intestato_nome || '—'}</td>
+    <td><span class="badge ${i.stato === 'attiva' ? 'badge-green' : 'badge-gray'}">${i.stato}</span></td>
+    <td>${formatData(i.data_iscrizione)}</td>
+    <td><button class="btn btn-sm btn-primary" onclick="apriModalIscrizione('${i.atleta_id}')">Tariffa / Rate</button></td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// PAGAMENTI
+// ============================================================
+async function loadPagamenti() {
+  const filtro = document.getElementById('filter-pagamento-stato')?.value;
+  let query = sb.from('pagamento')
+    .select(`id, data_pagamento, data_scadenza, importo, tipo, metodo, pagato, numero_ricevuta, note,
+      iscrizione(atleta_id, intestato_nome, atleta(cognome, nome),
+        iscrizione_gruppo(gruppo(societa_id, societa(nome))))`)
+    .order('data_scadenza', { ascending: true });
+  if (filtro !== '') query = query.eq('pagato', filtro === 'true');
+
+  const { data } = await query;
+  const tbody = document.getElementById('tbody-pagamenti');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">💳</div><p>Nessun pagamento trovato</p></div></td></tr>';
+    return;
+  }
+
+  const oggi = new Date();
+  tbody.innerHTML = data.map(p => {
+    const scad = p.data_scadenza ? new Date(p.data_scadenza + 'T00:00:00') : null;
+    const inRitardo = scad && !p.pagato && scad < oggi;
+
+    // Recupera società id per la ricevuta
+    const societaId = p.iscrizione?.iscrizione_gruppo?.[0]?.gruppo?.societa_id || null;
+    const societaNome = p.iscrizione?.iscrizione_gruppo?.[0]?.gruppo?.societa?.nome || '';
+    const atletaNome = (p.iscrizione?.atleta?.cognome || '') + ' ' + (p.iscrizione?.atleta?.nome || '');
+
+    let statoHtml;
+    if (p.pagato) {
+      statoHtml = '<span class="badge badge-green">✓ Pagato</span>';
+    } else if (inRitardo) {
+      statoHtml = '<span class="badge badge-red">⚠ Scaduto</span>';
+    } else {
+      statoHtml = '<span class="badge badge-yellow">In attesa</span>';
+    }
+
+    const btnAzione = p.pagato
+      ? '<div style="display:flex;gap:4px;align-items:center;">' +
+        '<span style="color:var(--text3);font-size:11px;font-family:var(--mono)">' + (p.numero_ricevuta || '') + '</span>' +
+        '<button class="btn btn-sm btn-secondary" onclick="generaPdfRicevuta(\''+p.id+'\')">📄 PDF</button>' +
+        '</div>'
+      : '<button class="btn btn-sm btn-primary" onclick="apriModalPagamento(\''+p.id+'\', \''+atletaNome+'\', \''+p.tipo+'\', '+p.importo+', \''+p.data_scadenza+'\', \''+societaId+'\')">Registra</button>';
+
+    return '<tr' + (inRitardo ? ' style="background:rgba(224,92,92,0.04)"' : '') + '>' +
+      '<td><strong>' + atletaNome + '</strong>' + (societaNome ? '<br><small style="color:var(--text3)">' + societaNome + '</small>' : '') + '</td>' +
+      '<td><span class="badge badge-gray">' + (p.tipo || '—') + '</span></td>' +
+      '<td style="font-family:var(--mono)">' + formatEuro(p.importo) + '</td>' +
+      '<td' + (inRitardo ? ' style="color:var(--danger)"' : '') + '>' + formatData(p.data_scadenza) + '</td>' +
+      '<td>' + (p.metodo || '—') + '</td>' +
+      '<td>' + statoHtml + '</td>' +
+      '<td>' + btnAzione + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ============================================================
+// DOCUMENTI
+// ============================================================
+async function loadDocumenti() {
+  const filtroTipo = document.getElementById('filter-doc-tipo')?.value;
+
+  // Carica atleti con i loro documenti
+  let query = sb.from('documento')
+    .select('id, tipo, file_path, file_nome, data_scadenza, valido, atleta_id, atleta(cognome, nome)')
+    .order('data_scadenza');
+  if (filtroTipo) query = query.eq('tipo', filtroTipo);
+
+  const { data } = await query;
+  const tbody = document.getElementById('tbody-documenti');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📄</div><p>Nessun documento trovato</p></div></td></tr>';
+    return;
+  }
+  const oggi = new Date();
+  tbody.innerHTML = data.map(d => {
+    const scad = d.data_scadenza ? new Date(d.data_scadenza + 'T00:00:00') : null;
+    const giorni = scad ? Math.round((scad - oggi) / 86400000) : null;
+    let badgeClass = 'badge-green', badgeText = 'Valido';
+    if (scad) {
+      if (giorni < 0) { badgeClass = 'badge-red'; badgeText = 'Scaduto'; }
+      else if (giorni <= 30) { badgeClass = 'badge-red'; badgeText = giorni + ' gg'; }
+      else if (giorni <= 60) { badgeClass = 'badge-yellow'; badgeText = giorni + ' gg'; }
+    }
+    const atletaNome = (d.atleta?.cognome || '') + ' ' + (d.atleta?.nome || '');
+    return '<tr>' +
+      '<td><strong>' + atletaNome + '</strong></td>' +
+      '<td><span class="badge badge-gray">' + (d.tipo?.replace(/_/g, ' ') || '—') + '</span></td>' +
+      '<td>' + formatData(d.data_scadenza) + '</td>' +
+      '<td><span class="badge ' + badgeClass + '">' + badgeText + '</span></td>' +
+      '<td>' +
+        (d.file_path ? '<button class="btn btn-sm btn-secondary" onclick="scaricaDocumentoById(\"' + d.id + '\",\"' + d.file_path + '\")">⬇ Scarica</button>' : '<span style="color:var(--text3)">—</span>') +
+      '</td>' +
+      '<td><button class="btn btn-sm btn-primary" data-id="' + d.atleta_id + '" data-nome="' + atletaNome.replace(/"/g, '') + '" onclick="gestisciDocClick(this)">Gestisci</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function scaricaDocumentoById(id, filePath) {
+  const { data, error } = await sb.storage
+    .from('documenti-atleti')
+    .createSignedUrl(filePath, 60);
+  if (error) { toast('Errore download: ' + error.message, 'error'); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
+// ============================================================
+// TARIFFE
+// ============================================================
+async function loadTariffe() {
+  let query = sb.from('tariffa')
+    .select('id, nome, descrizione, importo_iscrizione, importo_rata, frequenza_rata, numero_rate, societa(nome), stagione(nome)')
+    .order('nome');
+  if (currentSocietaId) query = query.eq('societa_id', currentSocietaId);
+  if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
+
+  const { data } = await query;
+  const tbody = document.getElementById('tbody-tariffe');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🏷️</div><p>Nessuna tariffa configurata. Creane una con il bottone "+ Nuova tariffa".</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(t => {
+    const totale = (parseFloat(t.importo_iscrizione) || 0) + ((parseFloat(t.importo_rata) || 0) * (t.numero_rate || 0));
+    return '<tr>' +
+      '<td><strong>' + t.nome + '</strong>' + (t.descrizione ? '<br><small style="color:var(--text3)">' + t.descrizione + '</small>' : '') + '</td>' +
+      '<td>' + (t.societa?.nome || '—') + '</td>' +
+      '<td>' + (t.stagione?.nome || '—') + '</td>' +
+      '<td style="font-family:var(--mono)">' + formatEuro(t.importo_iscrizione) + '</td>' +
+      '<td style="font-family:var(--mono)">' + formatEuro(t.importo_rata) + '</td>' +
+      '<td><span class="badge badge-gray">' + (t.frequenza_rata || '—') + '</span></td>' +
+      '<td style="font-family:var(--mono)">' + (t.numero_rate ?? 0) + '</td>' +
+      '<td style="font-family:var(--mono);font-weight:600;">' + formatEuro(totale) + '</td>' +
+      '<td><button class="btn btn-sm btn-secondary" data-id="' + t.id + '" onclick="modificaTariffa(this)">Modifica</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ============================================================
+// UTENTI
+// ============================================================
+async function loadUtenti() {
+  const { data } = await sb.from('profilo').select('id, nome, cognome, email, ruolo, attivo').order('cognome');
+  const tbody = document.getElementById('tbody-utenti');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🔐</div><p>Nessun utente trovato</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(u => `<tr>
+    <td><strong>${u.cognome} ${u.nome}</strong></td>
+    <td>${u.email}</td>
+    <td><span class="badge badge-gray">${u.ruolo}</span></td>
+    <td>—</td>
+    <td>${u.attivo ? '<span class="badge badge-green">Attivo</span>' : '<span class="badge badge-red">Disattivo</span>'}</td>
+    <td><button class="btn btn-sm btn-secondary">Modifica</button></td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// PROFILO
+// ============================================================
+function loadProfilo() {
+  if (!currentProfilo) return;
+  document.getElementById('profilo-nome').value = currentProfilo.nome || '';
+  document.getElementById('profilo-cognome').value = currentProfilo.cognome || '';
+  document.getElementById('profilo-email').value = currentUser?.email || '';
+  document.getElementById('profilo-ruolo').value = currentProfilo.ruolo || '';
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('btn-login');
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Accesso in corso...';
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    err.textContent = 'Credenziali non valide. Riprova.';
+    err.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Accedi';
+    return;
+  }
+  await initApp(data.user);
+}
+
+async function initApp(user) {
+  currentUser = user;
+  const { data: profilo } = await sb.from('profilo').select('*').eq('id', user.id).single();
+  if (!profilo) { toast('Profilo non trovato. Contatta l\'amministratore.', 'error'); return; }
+  currentProfilo = profilo;
+
+  // Aggiorna UI utente
+  document.getElementById('user-name').textContent = `${profilo.nome} ${profilo.cognome}`;
+  document.getElementById('user-role').textContent = profilo.ruolo;
+  document.getElementById('user-avatar').textContent = profilo.nome?.[0]?.toUpperCase() || 'U';
+
+  // Nascondi select società se non admin/segreteria
+  if (!['amministratore', 'segreteria'].includes(profilo.ruolo)) {
+    document.getElementById('sidebar-society').style.display = 'none';
+  }
+
+  // Build menu
+  buildMenu(profilo.ruolo);
+  await loadSocieta();
+  await loadStagione();
+
+  // Mostra app
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  navigateTo('dashboard');
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  currentProfilo = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+}
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+document.getElementById('btn-login').addEventListener('click', login);
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+document.getElementById('btn-logout').addEventListener('click', logout);
+document.getElementById('menu-toggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+});
+
+// Filtri con debounce
+function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; }
+document.getElementById('search-atleti').addEventListener('input', debounce(loadAtleti, 300));
+document.getElementById('filter-pagamento-stato').addEventListener('change', loadPagamenti);
+document.getElementById('filter-doc-tipo').addEventListener('change', loadDocumenti);
+
+// Bottoni nuovi record (placeholder)
+['btn-nuovo-genitore','btn-nuovo-gruppo','btn-nuova-iscrizione',
+ 'btn-nuovo-pagamento','btn-nuovo-documento','btn-nuova-tariffa','btn-nuovo-utente'].forEach(id => {
+  document.getElementById(id)?.addEventListener('click', () => toast('Funzione in sviluppo', 'warning'));
+});
+
+document.getElementById('btn-salva-profilo')?.addEventListener('click', async () => {
+  const { error } = await sb.from('profilo').update({
+    nome: document.getElementById('profilo-nome').value,
+    cognome: document.getElementById('profilo-cognome').value,
+  }).eq('id', currentUser.id);
+  if (error) toast('Errore salvataggio', 'error');
+  else { toast('Profilo aggiornato'); currentProfilo.nome = document.getElementById('profilo-nome').value; }
+});
+
+document.getElementById('btn-cambia-pw')?.addEventListener('click', async () => {
+  const pw1 = document.getElementById('profilo-pw1').value;
+  const pw2 = document.getElementById('profilo-pw2').value;
+  if (pw1 !== pw2) { toast('Le password non coincidono', 'error'); return; }
+  if (pw1.length < 8) { toast('La password deve essere di almeno 8 caratteri', 'warning'); return; }
+  const { error } = await sb.auth.updateUser({ password: pw1 });
+  if (error) toast('Errore aggiornamento password', 'error');
+  else toast('Password aggiornata con successo');
+});
+
+
+
+// ============================================================
+// MODAL NUOVO ATLETA - FLUSSO COMPLETO
+// ============================================================
+let maStep = 1;
+let maMinorenne = false;
+let maSocieta = null;
+let maSocietaNome = '';
+
+async function apriModalAtleta() {
+  maStep = 1;
+  maMinorenne = false;
+  maSocieta = null;
+  resetFormAtleta();
+  await popolaSocietaModal();
+  maShowStep(1);
+  document.getElementById('modal-atleta').classList.add('open');
+}
+
+function chiudiModalAtleta() {
+  document.getElementById('modal-atleta').classList.remove('open');
+}
+
+function resetFormAtleta() {
+  const ids = ['a-nome','a-cognome','a-cf','a-nascita','a-comune-nascita','a-prov-nascita',
+    'a-indirizzo','a-comune','a-provincia','a-cap','a-telefono','a-email','a-note',
+    'g1-nome','g1-cognome','g1-cf','g1-telefono','g1-email','g1-indirizzo',
+    'g2-nome','g2-cognome','g2-cf','g2-telefono','g2-email','g2-indirizzo'];
+  ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const sesso = document.getElementById('a-sesso'); if(sesso) sesso.value = '';
+  const g1rel = document.getElementById('g1-relazione'); if(g1rel) g1rel.value = 'padre';
+  const g2rel = document.getElementById('g2-relazione'); if(g2rel) g2rel.value = 'madre';
+  document.getElementById('alert-minorenne').style.display = 'none';
+  document.getElementById('sezione-g2').style.display = 'none';
+  const btnG2 = document.getElementById('btn-aggiungi-g2');
+  if(btnG2) btnG2.textContent = '+ Aggiungi secondo genitore (opzionale)';
+}
+
+async function popolaSocietaModal() {
+  const sel = document.getElementById('reg-societa');
+  sel.innerHTML = '<option value="">— Seleziona società —</option>';
+  
+  // Se segreteria: mostra solo la sua società
+  if (currentProfilo?.ruolo === 'segreteria') {
+    const { data } = await sb.from('segreteria_societa')
+      .select('societa(id, nome)')
+      .eq('profilo_id', currentUser.id);
+    if (data) data.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.societa.id;
+      opt.textContent = r.societa.nome;
+      sel.appendChild(opt);
+      if (data.length === 1) { sel.value = r.societa.id; sel.disabled = true; }
+    });
+  } else {
+    // Admin: tutte le società
+    const { data } = await sb.from('societa').select('id, nome').order('nome');
+    if (data) data.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.nome;
+      sel.appendChild(opt);
+    });
+  }
+
+  // Stagione attiva
+  const stagLabel = document.getElementById('reg-stagione-label');
+  if (currentStagioneId) {
+    const { data: st } = await sb.from('stagione').select('nome').eq('id', currentStagioneId).single();
+    if (st) stagLabel.value = st.nome;
+  } else {
+    stagLabel.value = 'Nessuna stagione attiva';
+  }
+}
+
+function maShowStep(n) {
+  const totalSteps = maMinorenne ? 4 : 3;
+  // Nascondi tutti gli step
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('mstep-' + i);
+    if(el) el.style.display = 'none';
+  });
+  document.getElementById('mstep-' + n).style.display = 'block';
+
+  // Aggiorna dot
+  [1,2,3,4].forEach(i => {
+    const dot = document.getElementById('sdot-' + i);
+    if(!dot) return;
+    dot.className = 'step-dot' + (i < n ? ' done' : i === n ? ' active' : '');
+  });
+  [1,2,3].forEach(i => {
+    const line = document.getElementById('sline-' + i);
+    if(!line) return;
+    line.className = 'step-line' + (i < n ? ' done' : '');
+  });
+
+  // Bottoni
+  document.getElementById('btn-ma-back').style.display = n > 1 ? 'block' : 'none';
+  const isLast = (maMinorenne && n === 4) || (!maMinorenne && n === 3);
+  document.getElementById('btn-ma-next').style.display = isLast ? 'none' : 'block';
+  document.getElementById('btn-ma-salva').style.display = isLast ? 'block' : 'none';
+
+  // Sottotitolo
+  const subs = ['Seleziona la società di appartenenza', 'Dati anagrafici atleta', 'Dati genitore/tutore', 'Controlla e conferma'];
+  document.getElementById('modal-atleta-sub').textContent = subs[n-1] || '';
+
+  maStep = n;
+}
+
+function maStepNext() {
+  if (maStep === 1) {
+    const societa = document.getElementById('reg-societa').value;
+    if (!societa) { toast('Seleziona una società', 'error'); return; }
+    maSocieta = societa;
+    maSocietaNome = document.getElementById('reg-societa').options[document.getElementById('reg-societa').selectedIndex].text;
+    maShowStep(2);
+  } else if (maStep === 2) {
+    if (!validaStepAtleta()) return;
+    const nascita = document.getElementById('a-nascita').value;
+    const eta = Math.floor((Date.now() - new Date(nascita)) / 31557600000);
+    maMinorenne = eta < 18;
+    if (maMinorenne) {
+      maShowStep(3);
+    } else {
+      generaRiepilogoAtleta();
+      maShowStep(3); // step 3 è riepilogo per maggiorenni
+      // Nascondi step 3 genitore e mostra step 4 come riepilogo
+      document.getElementById('mstep-3').style.display = 'none';
+      document.getElementById('mstep-4').style.display = 'block';
+      document.getElementById('btn-ma-next').style.display = 'none';
+      document.getElementById('btn-ma-salva').style.display = 'block';
+      maStep = 4;
+      // Aggiorna dot
+      [1,2,3].forEach(i => document.getElementById('sdot-' + i).className = 'step-dot done');
+      document.getElementById('sdot-4').className = 'step-dot active';
+      [1,2,3].forEach(i => document.getElementById('sline-' + i).className = 'step-line done');
+    }
+  } else if (maStep === 3) {
+    if (!validaStepGenitore()) return;
+    aggiornaIntestazione();
+    generaRiepilogoAtleta();
+    maShowStep(4);
+  }
+}
+
+function maStepBack() {
+  if (maStep === 2) maShowStep(1);
+  else if (maStep === 3) maShowStep(2);
+  else if (maStep === 4) {
+    if (maMinorenne) maShowStep(3);
+    else maShowStep(2);
+  }
+}
+
+function validaStepAtleta() {
+  if (!document.getElementById('a-cognome').value.trim()) { toast('Inserisci il cognome', 'error'); return false; }
+  if (!document.getElementById('a-nome').value.trim()) { toast('Inserisci il nome', 'error'); return false; }
+  if (!document.getElementById('a-nascita').value) { toast('Inserisci la data di nascita', 'error'); return false; }
+  return true;
+}
+
+function validaStepGenitore() {
+  if (!document.getElementById('g1-cognome').value.trim()) { toast('Inserisci il cognome del genitore', 'error'); return false; }
+  if (!document.getElementById('g1-nome').value.trim()) { toast('Inserisci il nome del genitore', 'error'); return false; }
+  if (!document.getElementById('g1-telefono').value.trim()) { toast('Inserisci il telefono del genitore', 'error'); return false; }
+  return true;
+}
+
+function aggiornaIntestazione() {
+  const sel = document.getElementById('intestazione-ricevute');
+  const g1 = document.getElementById('g1-cognome').value + ' ' + document.getElementById('g1-nome').value;
+  sel.innerHTML = '<option value="g1">' + g1.trim() + ' (Genitore 1)</option>';
+  const g2c = document.getElementById('g2-cognome').value;
+  const g2n = document.getElementById('g2-nome').value;
+  if (g2c && g2n) {
+    sel.innerHTML += '<option value="g2">' + g2c + ' ' + g2n + ' (Genitore 2)</option>';
+  }
+}
+
+function generaRiepilogoAtleta() {
+  const v = id => document.getElementById(id)?.value || '';
+  const nascita = v('a-nascita');
+  let html = '<div style="margin-bottom:12px"><strong style="font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text3)">Società</strong><br>';
+  html += '🏢 ' + maSocietaNome + ' — Stagione ' + document.getElementById('reg-stagione-label').value + '</div>';
+  html += '<div style="margin-bottom:12px"><strong style="font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text3)">Atleta</strong><br>';
+  html += '👤 ' + v('a-cognome').toUpperCase() + ' ' + v('a-nome').toUpperCase() + '<br>';
+  html += '📅 ' + (nascita ? new Date(nascita).toLocaleDateString('it-IT') : '—') + ' — ' + (maMinorenne ? '🔸 Minorenne' : '🔹 Maggiorenne') + '<br>';
+  if(v('a-cf')) html += '🪪 ' + v('a-cf').toUpperCase() + '<br>';
+  if(v('a-telefono')) html += '📞 ' + v('a-telefono') + '<br>';
+  if(v('a-email')) html += '✉️ ' + v('a-email') + '<br>';
+  if(v('a-comune')) html += '🏠 ' + v('a-comune').toUpperCase() + (v('a-provincia') ? ' (' + v('a-provincia').toUpperCase() + ')' : '') + '</div>';
+
+  if (maMinorenne) {
+    html += '<div style="margin-bottom:12px"><strong style="font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text3)">Genitore 1</strong><br>';
+    html += '👤 ' + v('g1-cognome').toUpperCase() + ' ' + v('g1-nome').toUpperCase() + ' (' + v('g1-relazione') + ')<br>';
+    html += '📞 ' + v('g1-telefono') + '</div>';
+    if (v('g2-cognome') && v('g2-nome')) {
+      html += '<div style="margin-bottom:12px"><strong style="font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text3)">Genitore 2</strong><br>';
+      html += '👤 ' + v('g2-cognome').toUpperCase() + ' ' + v('g2-nome').toUpperCase() + ' (' + v('g2-relazione') + ')<br>';
+      if(v('g2-telefono')) html += '📞 ' + v('g2-telefono') + '</div>';
+    }
+    const sel = document.getElementById('intestazione-ricevute');
+    if(sel) html += '<div><strong style="font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text3)">Ricevute intestate a</strong><br>🧾 ' + sel.options[sel.selectedIndex]?.text + '</div>';
+  }
+  document.getElementById('riepilogo-content').innerHTML = html;
+}
+
+async function salvaAtleta() {
+  const btn = document.getElementById('btn-ma-salva');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+  const v = id => document.getElementById(id)?.value?.trim() || null;
+
+  try {
+    // 1. Inserisci atleta
+    const { data: atleta, error: e1 } = await sb.from('atleta').insert({
+      nome: v('a-nome')?.toUpperCase(),
+      cognome: v('a-cognome')?.toUpperCase(),
+      codice_fiscale: v('a-cf')?.toUpperCase(),
+      data_nascita: v('a-nascita'),
+      sesso: document.getElementById('a-sesso')?.value || null,
+      comune_nascita: v('a-comune-nascita')?.toUpperCase(),
+      provincia_nascita: v('a-prov-nascita')?.toUpperCase(),
+      indirizzo: v('a-indirizzo')?.toUpperCase(),
+      comune: v('a-comune')?.toUpperCase(),
+      provincia: v('a-provincia')?.toUpperCase(),
+      cap: v('a-cap'),
+      telefono: v('a-telefono'),
+      email: v('a-email'),
+      note: v('a-note'),
+    }).select().single();
+    if (e1) throw new Error(e1.message);
+
+    // 2. Crea iscrizione alla stagione attiva
+    if (currentStagioneId) {
+      const intestatoCf = maMinorenne ? (v('g1-cf') || '') : (v('a-cf') || '');
+      const intestatoNome = maMinorenne
+        ? (v('g1-cognome')?.toUpperCase() + ' ' + v('g1-nome')?.toUpperCase()).trim()
+        : (v('a-cognome')?.toUpperCase() + ' ' + v('a-nome')?.toUpperCase()).trim();
+
+      await sb.from('iscrizione').insert({
+        atleta_id: atleta.id,
+        stagione_id: currentStagioneId,
+        data_iscrizione: new Date().toISOString().split('T')[0],
+        stato: 'attiva',
+        intestato_cf: intestatoCf,
+        intestato_nome: intestatoNome,
+      });
+    }
+
+    // 3. Genitori (se minorenne)
+    if (maMinorenne) {
+      const { data: g1, error: e2 } = await sb.from('genitore').insert({
+        nome: v('g1-nome')?.toUpperCase(),
+        cognome: v('g1-cognome')?.toUpperCase(),
+        codice_fiscale: v('g1-cf')?.toUpperCase(),
+        telefono: v('g1-telefono'),
+        email: v('g1-email'),
+        indirizzo: v('g1-indirizzo')?.toUpperCase(),
+      }).select().single();
+      if (e2) throw new Error(e2.message);
+
+      await sb.from('atleta_genitore').insert({
+        atleta_id: atleta.id,
+        genitore_id: g1.id,
+        relazione: document.getElementById('g1-relazione')?.value,
+        referente_principale: true,
+      });
+
+      const g2c = v('g2-cognome'), g2n = v('g2-nome');
+      if (g2c && g2n) {
+        const { data: g2 } = await sb.from('genitore').insert({
+          nome: g2n.toUpperCase(),
+          cognome: g2c.toUpperCase(),
+          codice_fiscale: v('g2-cf')?.toUpperCase(),
+          telefono: v('g2-telefono'),
+          email: v('g2-email'),
+          indirizzo: v('g2-indirizzo')?.toUpperCase(),
+        }).select().single();
+        if (g2) await sb.from('atleta_genitore').insert({
+          atleta_id: atleta.id,
+          genitore_id: g2.id,
+          relazione: document.getElementById('g2-relazione')?.value,
+          referente_principale: false,
+        });
+      }
+    }
+
+    toast('Atleta registrato con successo!', 'success');
+    chiudiModalAtleta();
+    loadAtleti();
+    loadDashboard();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '💾 Registra atleta';
+  }
+}
+
+// Evento data nascita → mostra alert minorenne
+document.addEventListener('change', e => {
+  if (e.target.id === 'a-nascita') {
+    const eta = Math.floor((Date.now() - new Date(e.target.value)) / 31557600000);
+    document.getElementById('alert-minorenne').style.display = eta < 18 ? 'block' : 'none';
+  }
+});
+
+// Evento aggiungi genitore 2
+document.addEventListener('click', e => {
+  if (e.target.id === 'btn-aggiungi-g2') {
+    const sez = document.getElementById('sezione-g2');
+    const aperto = sez.style.display !== 'none';
+    sez.style.display = aperto ? 'none' : 'block';
+    e.target.textContent = aperto ? '+ Aggiungi secondo genitore (opzionale)' : '− Rimuovi secondo genitore';
+    if (!aperto) {
+      const sel = document.getElementById('intestazione-ricevute');
+      const g1c = document.getElementById('g1-cognome').value;
+      const g1n = document.getElementById('g1-nome').value;
+      if(sel && g1c) sel.innerHTML += '<option value="g2">' + g1c + ' ' + g1n + ' (Genitore 2)</option>';
+    } else {
+      const sel = document.getElementById('intestazione-ricevute');
+      if(sel) {
+        const g1c = document.getElementById('g1-cognome').value;
+        const g1n = document.getElementById('g1-nome').value;
+        sel.innerHTML = '<option value="g1">' + g1c + ' ' + g1n + ' (Genitore 1)</option>';
+      }
+    }
+  }
+});
+
+
+
+// ============================================================
+// GRUPPI / SQUADRE
+// ============================================================
+async function apriModalGruppo() {
+  document.getElementById('gr-nome').value = '';
+  document.getElementById('gr-note').value = '';
+  document.getElementById('gr-tipo').value = 'giovanile';
+  document.getElementById('gr-quota').value = 'false';
+
+  // Popola società
+  const sel = document.getElementById('gr-societa');
+  sel.innerHTML = '<option value="">— Seleziona società —</option>';
+  if (currentProfilo?.ruolo === 'segreteria') {
+    const { data } = await sb.from('segreteria_societa').select('societa(id, nome)').eq('profilo_id', currentUser.id);
+    if (data) data.forEach(r => {
+      const o = document.createElement('option');
+      o.value = r.societa.id; o.textContent = r.societa.nome;
+      sel.appendChild(o);
+      if (data.length === 1) { sel.value = r.societa.id; sel.disabled = true; }
+    });
+  } else {
+    const { data } = await sb.from('societa').select('id, nome').order('nome');
+    if (data) data.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = s.nome;
+      sel.appendChild(o);
+    });
+  }
+
+  // Stagione
+  if (currentStagioneId) {
+    const { data: st } = await sb.from('stagione').select('nome').eq('id', currentStagioneId).single();
+    if (st) document.getElementById('gr-stagione-label').value = st.nome;
+  }
+
+  // Pre-seleziona società dalla sidebar se filtrata
+  if (currentSocietaId) sel.value = currentSocietaId;
+
+  document.getElementById('modal-gruppo').classList.add('open');
+}
+
+function chiudiModalGruppo() {
+  document.getElementById('modal-gruppo').classList.remove('open');
+  document.getElementById('gr-societa').disabled = false;
+}
+
+async function salvaGruppo() {
+  const societa = document.getElementById('gr-societa').value;
+  const nome = document.getElementById('gr-nome').value.trim().toUpperCase();
+  if (!societa) { toast('Seleziona una società', 'error'); return; }
+  if (!nome) { toast('Inserisci il nome del gruppo', 'error'); return; }
+  if (!currentStagioneId) { toast('Nessuna stagione attiva configurata', 'error'); return; }
+
+  const { error } = await sb.from('gruppo').insert({
+    societa_id: societa,
+    stagione_id: currentStagioneId,
+    nome: nome,
+    tipo: document.getElementById('gr-tipo').value,
+    con_quota: document.getElementById('gr-quota').value === 'true',
+    note: document.getElementById('gr-note').value.trim() || null,
+  });
+
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Gruppo creato con successo!', 'success');
+  chiudiModalGruppo();
+  loadGruppi();
+}
+
+// ============================================================
+// ASSEGNAZIONE ATLETA A GRUPPO
+// ============================================================
+async function apriModalAssegna(gruppoId = null) {
+  // Data default oggi
+  document.getElementById('as-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('as-principale').value = 'true';
+
+  // Popola gruppi
+  const selG = document.getElementById('as-gruppo');
+  selG.innerHTML = '<option value="">— Seleziona gruppo —</option>';
+  let qGruppi = sb.from('gruppo').select('id, nome, societa(nome)').order('nome');
+  if (currentStagioneId) qGruppi = qGruppi.eq('stagione_id', currentStagioneId);
+  if (currentSocietaId) qGruppi = qGruppi.eq('societa_id', currentSocietaId);
+  const { data: gruppi } = await qGruppi;
+  if (gruppi) gruppi.forEach(g => {
+    const o = document.createElement('option');
+    o.value = g.id;
+    o.textContent = g.nome + ' — ' + (g.societa?.nome || '');
+    selG.appendChild(o);
+  });
+  if (gruppoId) selG.value = gruppoId;
+
+  // Popola atleti
+  const selA = document.getElementById('as-atleta');
+  selA.innerHTML = '<option value="">— Seleziona atleta —</option>';
+  const { data: atleti } = await sb.from('atleta').select('id, cognome, nome').order('cognome');
+  if (atleti) atleti.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id;
+    o.textContent = a.cognome + ' ' + a.nome;
+    selA.appendChild(o);
+  });
+
+  document.getElementById('modal-assegna').classList.add('open');
+}
+
+function chiudiModalAssegna() {
+  document.getElementById('modal-assegna').classList.remove('open');
+}
+
+async function salvaAssegnazione() {
+  const gruppoId = document.getElementById('as-gruppo').value;
+  const atletaId = document.getElementById('as-atleta').value;
+  if (!gruppoId) { toast('Seleziona un gruppo', 'error'); return; }
+  if (!atletaId) { toast('Seleziona un atleta', 'error'); return; }
+
+  // Trova l'iscrizione dell'atleta nella stagione attiva
+  const { data: isc } = await sb.from('iscrizione')
+    .select('id')
+    .eq('atleta_id', atletaId)
+    .eq('stagione_id', currentStagioneId)
+    .single();
+
+  if (!isc) {
+    toast('L\'atleta non ha un\'iscrizione nella stagione attiva. Registralo prima.', 'error');
+    return;
+  }
+
+  // Controlla se già assegnato a questo gruppo
+  const { data: existing } = await sb.from('iscrizione_gruppo')
+    .select('iscrizione_id')
+    .eq('iscrizione_id', isc.id)
+    .eq('gruppo_id', gruppoId)
+    .single();
+
+  if (existing) {
+    toast('L\'atleta è già assegnato a questo gruppo', 'error');
+    return;
+  }
+
+  const { error } = await sb.from('iscrizione_gruppo').insert({
+    iscrizione_id: isc.id,
+    gruppo_id: gruppoId,
+    data_assegnazione: document.getElementById('as-data').value,
+    principale: document.getElementById('as-principale').value === 'true',
+  });
+
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Atleta assegnato al gruppo!', 'success');
+  chiudiModalAssegna();
+  loadGruppi();
+  loadAtleti();
+}
+
+
+// ============================================================
+// TARIFFE
+// ============================================================
+async function apriModalTariffa() {
+  document.getElementById('tar-nome').value = '';
+  document.getElementById('tar-descrizione').value = '';
+  document.getElementById('tar-iscrizione').value = '0';
+  document.getElementById('tar-rata').value = '0';
+  document.getElementById('tar-frequenza').value = 'nessuna';
+  document.getElementById('tar-nrate').value = '0';
+  document.getElementById('tar-preview').style.display = 'none';
+
+  // Popola società
+  const sel = document.getElementById('tar-societa');
+  sel.innerHTML = '<option value="">— Seleziona società —</option>';
+  sel.disabled = false;
+  if (currentProfilo?.ruolo === 'segreteria') {
+    const { data } = await sb.from('segreteria_societa').select('societa(id, nome)').eq('profilo_id', currentUser.id);
+    if (data) data.forEach(r => {
+      const o = document.createElement('option');
+      o.value = r.societa.id; o.textContent = r.societa.nome;
+      sel.appendChild(o);
+      if (data.length === 1) { sel.value = r.societa.id; sel.disabled = true; }
+    });
+  } else {
+    const { data } = await sb.from('societa').select('id, nome').order('nome');
+    if (data) data.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = s.nome;
+      sel.appendChild(o);
+    });
+    if (currentSocietaId) sel.value = currentSocietaId;
+  }
+
+  // Stagione
+  if (currentStagioneId) {
+    const { data: st } = await sb.from('stagione').select('nome').eq('id', currentStagioneId).single();
+    if (st) document.getElementById('tar-stagione-label').value = st.nome;
+  }
+
+  document.getElementById('modal-tariffa').classList.add('open');
+}
+
+function chiudiModalTariffa() {
+  document.getElementById('modal-tariffa').classList.remove('open');
+}
+
+function aggiornaTotale() {
+  const isc = parseFloat(document.getElementById('tar-iscrizione').value) || 0;
+  const rata = parseFloat(document.getElementById('tar-rata').value) || 0;
+  const nrate = parseInt(document.getElementById('tar-nrate').value) || 0;
+  const totale = isc + (rata * nrate);
+  const preview = document.getElementById('tar-preview');
+  const span = document.getElementById('tar-totale');
+  if (totale > 0) {
+    preview.style.display = 'block';
+    span.textContent = '€ ' + totale.toFixed(2).replace('.', ',');
+    if (nrate > 0) {
+      span.textContent += ' (€ ' + isc.toFixed(2).replace('.', ',') + ' iscrizione + ' + nrate + ' rate da € ' + rata.toFixed(2).replace('.', ',') + ')';
+    }
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+// Listeners per anteprima totale
+['tar-iscrizione','tar-rata','tar-nrate'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', aggiornaTotale);
+});
+
+document.getElementById('tar-frequenza')?.addEventListener('change', () => {
+  const freq = document.getElementById('tar-frequenza').value;
+  const nrateField = document.getElementById('tar-nrate');
+  if (freq === 'nessuna') {
+    nrateField.value = '0';
+    document.getElementById('tar-rata').value = '0';
+  }
+  aggiornaTotale();
+});
+
+async function modificaTariffa(btn) {
+  const id = btn.getAttribute('data-id');
+  const { data: t } = await sb.from('tariffa').select('*').eq('id', id).single();
+  if (!t) { toast('Tariffa non trovata', 'error'); return; }
+
+  // Popola il modal con i dati esistenti
+  await apriModalTariffa();
+
+  // Imposta i valori
+  document.getElementById('tar-societa').value = t.societa_id || '';
+  document.getElementById('tar-nome').value = t.nome || '';
+  document.getElementById('tar-descrizione').value = t.descrizione || '';
+  document.getElementById('tar-iscrizione').value = t.importo_iscrizione || 0;
+  document.getElementById('tar-rata').value = t.importo_rata || 0;
+  document.getElementById('tar-frequenza').value = t.frequenza_rata || 'nessuna';
+  document.getElementById('tar-nrate').value = t.numero_rate || 0;
+  aggiornaTotale();
+
+  // Cambia il bottone salva per aggiornare invece di inserire
+  const btnSalva = document.querySelector('#modal-tariffa .btn-primary');
+  btnSalva.textContent = '💾 Aggiorna tariffa';
+  btnSalva.onclick = async () => {
+    const nome = document.getElementById('tar-nome').value.trim().toUpperCase();
+    if (!nome) { toast('Inserisci il nome della tariffa', 'error'); return; }
+    const { error } = await sb.from('tariffa').update({
+      nome,
+      descrizione: document.getElementById('tar-descrizione').value.trim() || null,
+      importo_iscrizione: parseFloat(document.getElementById('tar-iscrizione').value) || 0,
+      importo_rata: parseFloat(document.getElementById('tar-rata').value) || 0,
+      frequenza_rata: document.getElementById('tar-frequenza').value,
+      numero_rate: parseInt(document.getElementById('tar-nrate').value) || 0,
+    }).eq('id', id);
+    if (error) { toast('Errore: ' + error.message, 'error'); return; }
+    toast('Tariffa aggiornata!', 'success');
+    chiudiModalTariffa();
+    // Ripristina bottone originale
+    btnSalva.textContent = '💾 Salva tariffa';
+    btnSalva.onclick = salvaTariffa;
+    loadTariffe();
+  };
+}
+
+async function salvaTariffa() {
+  const societa = document.getElementById('tar-societa').value;
+  const nome = document.getElementById('tar-nome').value.trim().toUpperCase();
+  if (!societa) { toast('Seleziona una società', 'error'); return; }
+  if (!nome) { toast('Inserisci il nome della tariffa', 'error'); return; }
+  if (!currentStagioneId) { toast('Nessuna stagione attiva', 'error'); return; }
+
+  const { error } = await sb.from('tariffa').insert({
+    societa_id: societa,
+    stagione_id: currentStagioneId,
+    nome: nome,
+    descrizione: document.getElementById('tar-descrizione').value.trim() || null,
+    importo_iscrizione: parseFloat(document.getElementById('tar-iscrizione').value) || 0,
+    importo_rata: parseFloat(document.getElementById('tar-rata').value) || 0,
+    frequenza_rata: document.getElementById('tar-frequenza').value,
+    numero_rate: parseInt(document.getElementById('tar-nrate').value) || 0,
+  });
+
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Tariffa salvata con successo!', 'success');
+  chiudiModalTariffa();
+  loadTariffe();
+}
+
+
+// ============================================================
+// ISCRIZIONI — ASSEGNAZIONE TARIFFA E GENERAZIONE RATE
+// ============================================================
+let currentIscrizioneId = null;
+let currentAtletaId = null;
+let tariffaSelezionata = null;
+
+async function apriModalIscrizione(atletaId) {
+  currentAtletaId = atletaId;
+  currentIscrizioneId = null;
+  tariffaSelezionata = null;
+  document.getElementById('isc-tariffa-preview').style.display = 'none';
+  document.getElementById('isc-preview-rate').style.display = 'none';
+  document.getElementById('btn-genera-rate').disabled = true;
+  document.getElementById('isc-data-inizio').value = new Date().toISOString().split('T')[0];
+
+  // Carica iscrizione atleta stagione attiva
+  const { data: isc } = await sb.from('iscrizione')
+    .select('id, stato, intestato_cf, intestato_nome, tariffa_id, atleta(cognome, nome), stagione(nome)')
+    .eq('atleta_id', atletaId)
+    .eq('stagione_id', currentStagioneId)
+    .single();
+
+  if (!isc) { toast('Nessuna iscrizione trovata per questo atleta nella stagione attiva', 'error'); return; }
+  currentIscrizioneId = isc.id;
+
+  // Aggiorna info atleta
+  document.getElementById('isc-atleta-nome').textContent = (isc.atleta?.cognome || '') + ' ' + (isc.atleta?.nome || '');
+  document.getElementById('isc-stagione-nome').textContent = isc.stagione?.nome || '—';
+  document.getElementById('isc-stato-badge').innerHTML = '<span class="badge ' + (isc.stato === 'attiva' ? 'badge-green' : 'badge-yellow') + '">' + isc.stato + '</span>';
+
+  // Carica tariffe disponibili per la società dell'atleta
+  const { data: tariffe } = await sb.from('tariffa')
+    .select('id, nome, importo_iscrizione, importo_rata, frequenza_rata, numero_rate')
+    .eq('stagione_id', currentStagioneId)
+    .order('nome');
+
+  const selT = document.getElementById('isc-tariffa');
+  selT.innerHTML = '<option value="">— Seleziona tariffa —</option>';
+  if (tariffe) tariffe.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.id;
+    const totale = (parseFloat(t.importo_iscrizione) || 0) + ((parseFloat(t.importo_rata) || 0) * (t.numero_rate || 0));
+    o.textContent = t.nome + ' — € ' + totale.toFixed(2).replace('.', ',');
+    o.dataset.tariffa = JSON.stringify(t);
+    selT.appendChild(o);
+  });
+  if (isc.tariffa_id) {
+    selT.value = isc.tariffa_id;
+    selT.dispatchEvent(new Event('change'));
+  }
+
+  // Carica intestatari (atleta + genitori se minorenne)
+  const selI = document.getElementById('isc-intestato');
+  selI.innerHTML = '';
+  // Atleta stesso
+  const oAtleta = document.createElement('option');
+  oAtleta.value = (isc.atleta?.cognome || '') + ' ' + (isc.atleta?.nome || '');
+  oAtleta.textContent = (isc.atleta?.cognome || '') + ' ' + (isc.atleta?.nome || '') + ' (atleta)';
+  selI.appendChild(oAtleta);
+  // Genitori
+  const { data: genitori } = await sb.from('atleta_genitore')
+    .select('relazione, referente_principale, genitore(cognome, nome, codice_fiscale)')
+    .eq('atleta_id', atletaId);
+  if (genitori) genitori.forEach(g => {
+    const o = document.createElement('option');
+    o.value = (g.genitore?.cognome || '') + ' ' + (g.genitore?.nome || '');
+    o.textContent = (g.genitore?.cognome || '') + ' ' + (g.genitore?.nome || '') + ' (' + g.relazione + ')';
+    if (g.referente_principale) { selI.insertBefore(o, selI.firstChild); }
+    else selI.appendChild(o);
+  });
+  // Pre-seleziona intestatario corrente
+  if (isc.intestato_nome) selI.value = isc.intestato_nome;
+
+  document.getElementById('modal-iscrizione').classList.add('open');
+  // Collega listener tariffa
+  const selTar = document.getElementById('isc-tariffa');
+  selTar.removeEventListener('change', onTariffaChange);
+  selTar.addEventListener('change', onTariffaChange);
+  // Triggera subito se tariffa già selezionata
+  if (selTar.value) onTariffaChange();
+}
+
+function chiudiModalIscrizione() {
+  document.getElementById('modal-iscrizione').classList.remove('open');
+}
+
+// Cambio tariffa → mostra preview (funzione standalone)
+function onTariffaChange() {
+  const sel = document.getElementById('isc-tariffa');
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.dataset.tariffa) {
+    document.getElementById('isc-tariffa-preview').style.display = 'none';
+    document.getElementById('btn-genera-rate').disabled = true;
+    tariffaSelezionata = null;
+    return;
+  }
+  tariffaSelezionata = JSON.parse(opt.dataset.tariffa);
+  const iscImp = parseFloat(tariffaSelezionata.importo_iscrizione) || 0;
+  const rata = parseFloat(tariffaSelezionata.importo_rata) || 0;
+  const nrate = tariffaSelezionata.numero_rate || 0;
+  const totale = iscImp + (rata * nrate);
+  document.getElementById('prev-isc').textContent = '€ ' + iscImp.toFixed(2).replace('.', ',');
+  document.getElementById('prev-rata').textContent = rata > 0 ? '€ ' + rata.toFixed(2).replace('.', ',') + ' x' + nrate : '—';
+  document.getElementById('prev-totale').textContent = '€ ' + totale.toFixed(2).replace('.', ',');
+  document.getElementById('isc-tariffa-preview').style.display = 'block';
+  document.getElementById('isc-preview-rate').style.display = 'none';
+  document.getElementById('btn-genera-rate').disabled = false;
+}
+
+function calcolaScadenze(dataInizio, frequenza, nrate) {
+  const scadenze = [];
+  const freq = { mensile: 1, trimestrale: 3, semestrale: 6, annuale: 12 };
+  const mesi = freq[frequenza] || 1;
+
+  // Parsing locale per evitare problemi timezone UTC
+  const parti = dataInizio.split('-');
+  const anno = parseInt(parti[0]);
+  const mese = parseInt(parti[1]) - 1; // 0-based
+
+  // Se numero rate specificato, usa quello
+  if (nrate && nrate > 0) {
+    for (let i = 0; i < nrate; i++) {
+      const dataRata = new Date(anno, mese + (i * mesi), 1);
+      const y = dataRata.getFullYear();
+      const m = String(dataRata.getMonth() + 1).padStart(2, '0');
+      scadenze.push(y + '-' + m + '-01');
+    }
+    return scadenze;
+  }
+
+  // Altrimenti calcola automaticamente fino a giugno
+  const annoFine = mese >= 8 ? anno + 1 : anno;
+  const dataFine = new Date(annoFine, 5, 30);
+
+  let i = 0;
+  while (true) {
+    const dataRata = new Date(anno, mese + (i * mesi), 1);
+    if (dataRata > dataFine) break;
+    const y = dataRata.getFullYear();
+    const m = String(dataRata.getMonth() + 1).padStart(2, '0');
+    scadenze.push(y + '-' + m + '-01');
+    i++;
+    if (i > 24) break;
+  }
+  return scadenze;
+}
+
+function anteprimaRate() {
+  if (!tariffaSelezionata) { toast('Seleziona prima una tariffa', 'error'); return; }
+  const dataInizio = document.getElementById('isc-data-inizio').value;
+  if (!dataInizio) { toast('Inserisci la data di inizio', 'error'); return; }
+
+  const t = tariffaSelezionata;
+  const isc = parseFloat(t.importo_iscrizione) || 0;
+  const rata = parseFloat(t.importo_rata) || 0;
+  const nrate = t.numero_rate || 0;
+  const freq = t.frequenza_rata;
+
+  let html = '';
+  let totale = 0;
+
+  if (isc > 0) {
+    html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">';
+    html += '<span>📋 Quota iscrizione</span>';
+    html += '<span style="font-family:var(--mono);font-weight:600;">€ ' + isc.toFixed(2).replace('.', ',') + '</span></div>';
+    totale += isc;
+  }
+
+  if (rata > 0 && nrate > 0) {
+    const scadenze = calcolaScadenze(dataInizio, freq, nrate);
+    scadenze.forEach((s, i) => {
+      html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">';
+      html += '<span>💳 Rata ' + (i+1) + ' — ' + new Date(s).toLocaleDateString('it-IT', {month:'long', year:'numeric'}) + '</span>';
+      html += '<span style="font-family:var(--mono);">€ ' + rata.toFixed(2).replace('.', ',') + '</span></div>';
+      totale += rata;
+    });
+  }
+
+  html += '<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:600;">';
+  html += '<span>Totale stagione</span>';
+  html += '<span style="font-family:var(--mono);color:var(--accent);">€ ' + totale.toFixed(2).replace('.', ',') + '</span></div>';
+
+  document.getElementById('isc-lista-rate').innerHTML = html;
+  document.getElementById('isc-preview-rate').style.display = 'block';
+}
+
+async function salvaIscrizioneTariffa() {
+  if (!tariffaSelezionata || !currentIscrizioneId) return;
+  const dataInizio = document.getElementById('isc-data-inizio').value;
+  const intestatoNome = document.getElementById('isc-intestato').value;
+  if (!dataInizio) { toast('Inserisci la data di inizio', 'error'); return; }
+  if (!intestatoNome) { toast('Seleziona l\'intestatario', 'error'); return; }
+
+  const btn = document.getElementById('btn-genera-rate');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    const t = tariffaSelezionata;
+    const isc = parseFloat(t.importo_iscrizione) || 0;
+    const rata = parseFloat(t.importo_rata) || 0;
+    const nrate = t.numero_rate || 0;
+    const freq = t.frequenza_rata;
+
+    // 1. Aggiorna iscrizione con tariffa e intestatario
+    await sb.from('iscrizione').update({
+      tariffa_id: t.id,
+      intestato_nome: intestatoNome,
+      stato: 'attiva',
+    }).eq('id', currentIscrizioneId);
+
+    // 2. Elimina rate esistenti per questa iscrizione
+    await sb.from('pagamento').delete().eq('iscrizione_id', currentIscrizioneId);
+
+    // 3. Genera nuovi pagamenti
+    const pagamenti = [];
+
+    if (isc > 0) {
+      pagamenti.push({
+        iscrizione_id: currentIscrizioneId,
+        data_scadenza: dataInizio,
+        importo: isc,
+        tipo: 'iscrizione',
+        pagato: false,
+      });
+    }
+
+    if (rata > 0) {
+      const scadenze = calcolaScadenze(dataInizio, freq, nrate);
+      scadenze.forEach(s => {
+        pagamenti.push({
+          iscrizione_id: currentIscrizioneId,
+          data_scadenza: s,
+          importo: rata,
+          tipo: 'rata',
+          pagato: false,
+        });
+      });
+    }
+
+    if (pagamenti.length > 0) {
+      const { error } = await sb.from('pagamento').insert(pagamenti);
+      if (error) throw new Error(error.message);
+    }
+
+    toast('Tariffa assegnata e ' + pagamenti.length + ' rate generate!', 'success');
+    chiudiModalIscrizione();
+    loadIscrizioni();
+    loadPagamenti();
+    loadDashboard();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Salva e genera rate';
+  }
+}
+
+
+// ============================================================
+// PAGAMENTI — REGISTRAZIONE
+// ============================================================
+let currentPagamentoId = null;
+let currentPagamentoSocietaId = null;
+
+async function apriModalPagamento(pagamentoId, atletaNome, tipo, importo, scadenza, societaId) {
+  currentPagamentoId = pagamentoId;
+  currentPagamentoSocietaId = societaId;
+
+  document.getElementById('pag-atleta-nome').textContent = atletaNome || '—';
+  document.getElementById('pag-tipo-label').textContent = tipo || '—';
+  document.getElementById('pag-importo-label').textContent = '€ ' + parseFloat(importo).toFixed(2).replace('.', ',');
+  document.getElementById('pag-scadenza-label').textContent = scadenza ? new Date(scadenza + 'T00:00:00').toLocaleDateString('it-IT') : '—';
+  document.getElementById('pag-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('pag-metodo').value = 'contanti';
+  document.getElementById('pag-ricevuta').value = '';
+  document.getElementById('pag-note').value = '';
+
+  document.getElementById('modal-pagamento').classList.add('open');
+}
+
+function chiudiModalPagamento() {
+  document.getElementById('modal-pagamento').classList.remove('open');
+}
+
+async function salvaPagamento() {
+  const data = document.getElementById('pag-data').value;
+  const metodo = document.getElementById('pag-metodo').value;
+  if (!data) { toast('Inserisci la data del pagamento', 'error'); return; }
+
+  const btn = document.querySelector('#modal-pagamento .btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    // Genera numero ricevuta automatico via RPC
+    const anno = new Date(data).getFullYear();
+    const { data: numRicevuta, error: errRpc } = await sb.rpc('prossimo_numero_ricevuta', {
+      p_societa_id: currentPagamentoSocietaId,
+      p_anno: anno,
+    });
+    if (errRpc) throw new Error(errRpc.message);
+
+    // Aggiorna pagamento
+    const { error } = await sb.from('pagamento').update({
+      pagato: true,
+      data_pagamento: data,
+      metodo: metodo,
+      numero_ricevuta: numRicevuta,
+      note: document.getElementById('pag-note').value.trim() || null,
+    }).eq('id', currentPagamentoId);
+
+    if (error) throw new Error(error.message);
+
+    document.getElementById('pag-ricevuta').value = numRicevuta;
+    toast('Pagamento registrato — Ricevuta n. ' + numRicevuta, 'success');
+    chiudiModalPagamento();
+    loadPagamenti();
+    loadDashboard();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Conferma pagamento';
+  }
+}
+
+
+// ============================================================
+// GENERAZIONE PDF RICEVUTA
+// ============================================================
+async function generaPdfRicevuta(pagamentoId) {
+  try {
+    // Carica dati pagamento completi
+    const { data: p, error } = await sb.from('pagamento')
+      .select(`id, data_pagamento, importo, tipo, metodo, numero_ricevuta, note,
+        iscrizione(
+          intestato_nome, intestato_cf,
+          atleta(cognome, nome, codice_fiscale, data_nascita, comune, provincia),
+          iscrizione_gruppo(gruppo(societa(id, nome, tipo, codice_fiscale, partita_iva, indirizzo, comune, provincia, cap, telefono, email, pec, testo_ricevuta, logo_url)))
+        )`)
+      .eq('id', pagamentoId)
+      .single();
+
+    if (error || !p) { toast('Errore caricamento dati ricevuta', 'error'); return; }
+
+    // Carica dati società separatamente per avere tutti i campi incluso logo_url
+    let soc = p.iscrizione?.iscrizione_gruppo?.[0]?.gruppo?.societa;
+    if (soc?.id) {
+      const { data: socCompleta } = await sb.from('societa').select('*').eq('id', soc.id).single();
+      if (socCompleta) soc = socCompleta;
+    }
+
+    // Converti logo in base64 per embedding nel PDF
+    let logoBase64 = null;
+    if (soc?.logo_url) {
+      try {
+        const resp = await fetch(soc.logo_url);
+        const blob = await resp.blob();
+        logoBase64 = await new Promise((res) => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      } catch(e) {
+        console.warn('Logo non caricato:', e);
+      }
+    }
+    const atleta = p.iscrizione?.atleta;
+    const intestatoNome = p.iscrizione?.intestato_nome || (atleta?.cognome + ' ' + atleta?.nome);
+    const intestatoCf = p.iscrizione?.intestato_cf || atleta?.codice_fiscale || '';
+
+    // Tipo documento in base alla forma giuridica
+    const tipoDoc = soc?.testo_ricevuta || 'Ricevuta di pagamento';
+    const tipoSoc = soc?.tipo || 'asd';
+
+    // Causale
+    const causali = { iscrizione: 'Quota di iscrizione', rata: 'Quota mensile/periodica', altro: 'Pagamento quota sportiva' };
+    const causale = causali[p.tipo] || 'Quota sportiva';
+
+    // Metodo pagamento
+    const metodi = { contanti: 'Contanti', bonifico: 'Bonifico bancario', pos: 'POS / Carta di credito', altro: 'Altro' };
+    const metodo = metodi[p.metodo] || p.metodo || '—';
+
+    // Genera HTML del PDF
+    const html = generaHtmlRicevuta({
+      numeroRicevuta: p.numero_ricevuta,
+      dataEmissione: p.data_pagamento,
+      tipoDoc,
+      tipoSoc,
+      societa: soc,
+      logoBase64,
+      intestatoNome,
+      intestatoCf,
+      atleta,
+      causale,
+      importo: p.importo,
+      metodo,
+      note: p.note,
+    });
+
+    // Chiudi eventuali modal aperti prima di stampare
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+
+    // Apri in nuova finestra e stampa
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 500);
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+function generaHtmlRicevuta(d) {
+  const formatDataIT = (s) => {
+    if (!s) return '—';
+    const p = s.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  };
+  const formatEuroIT = (n) => '€ ' + parseFloat(n).toFixed(2).replace('.', ',');
+
+  const socIndirizzo = [d.societa?.indirizzo, d.societa?.comune, d.societa?.provincia, d.societa?.cap].filter(Boolean).join(' — ');
+  const socContatti = [d.societa?.telefono ? 'Tel: ' + d.societa.telefono : null, d.societa?.email ? 'Email: ' + d.societa.email : null, d.societa?.pec ? 'PEC: ' + d.societa.pec : null].filter(Boolean).join(' | ');
+
+  const disclaimerAsd = d.tipoSoc === 'asd' || d.tipoSoc === 'ssd'
+    ? "<p style='font-size:10px;color:#666;border-top:1px solid #eee;padding-top:10px;margin-top:20px;'>ASD - Ricevuta emessa ai sensi art. 4 DPR 633/72. Non soggetta ad IVA.</p>"
+    : "<p style='font-size:10px;color:#666;border-top:1px solid #eee;padding-top:10px;margin-top:20px;'>Documento non avente valore fiscale. Per uso interno.</p>";
+
+  return `<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Ricevuta ${d.numeroRicevuta || ''}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @page { size: A4 portrait; margin: 1.5cm; }
+  html, body { width: 210mm; min-height: 297mm; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; padding: 0; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 3px solid #1a9e6a; }
+  .societa-logo { max-height: 55px; max-width: 180px; object-fit: contain; margin-bottom: 6px; display: block; }
+  .societa-nome { font-size: 17px; font-weight: 700; color: #1a1a1a; margin-bottom: 3px; }
+  .societa-dati { font-size: 10px; color: #555; line-height: 1.5; }
+  .ricevuta-box { text-align: right; }
+  .ricevuta-tipo { font-size: 13px; font-weight: 700; color: #1a9e6a; text-transform: uppercase; letter-spacing: 1px; }
+  .ricevuta-numero { font-size: 18px; font-weight: 700; font-family: monospace; margin: 3px 0; }
+  .ricevuta-data { font-size: 11px; color: #555; }
+  .sezione { background: #f8f9fa; border-radius: 5px; padding: 10px 14px; margin-bottom: 10px; }
+  .sezione-titolo { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 7px; }
+  .sezione-riga { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+  .sezione-riga:last-child { border-bottom: none; }
+  .sezione-riga .label { color: #555; }
+  .sezione-riga .valore { font-weight: 500; }
+  .importo-box { background: #1a9e6a; color: #fff; border-radius: 6px; padding: 14px 20px; text-align: center; margin: 14px 0; }
+  .importo-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.85; margin-bottom: 4px; }
+  .importo-valore { font-size: 30px; font-weight: 700; font-family: monospace; }
+  .firma { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 10px; }
+  .firma-box { text-align: center; width: 45%; }
+  .firma-linea { border-top: 1px solid #999; padding-top: 5px; font-size: 10px; color: #666; margin-top: 35px; }
+  @media print {
+    html, body { width: 210mm; }
+    @page { size: A4 portrait; margin: 1.5cm; }
+  }
+
+/* SCHEDA ATLETA */
+.scheda-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 500;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+.scheda-overlay.open { display: flex; }
+.scheda-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 760px;
+  margin: auto;
+  box-shadow: var(--shadow);
+}
+.scheda-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.scheda-avatar {
+  width: 56px; height: 56px;
+  background: var(--bg3);
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; color: var(--accent);
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.scheda-info { flex: 1; }
+.scheda-nome { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.scheda-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.scheda-close {
+  background: none; color: var(--text3); font-size: 22px;
+  padding: 4px 8px; border-radius: 4px; cursor: pointer; border: none;
+  transition: color 0.15s;
+}
+.scheda-close:hover { color: var(--danger); }
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  gap: 0;
+}
+.tab-btn {
+  padding: 12px 16px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text2);
+  background: none; border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { padding: 24px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.info-row {
+  display: contents;
+}
+.info-label {
+  padding: 10px 14px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.info-value {
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+.info-label:last-of-type, .info-value:last-of-type { border-bottom: none; }
+.sezione-titolo-scheda {
+  font-size: 11px; font-weight: 600;
+  color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px;
+  margin: 20px 0 10px;
+}
+.doc-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.doc-icon { font-size: 24px; flex-shrink: 0; }
+.doc-info { flex: 1; }
+.doc-tipo { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+.doc-dettaglio { font-size: 13px; margin-top: 2px; }
+.doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    ${d.logoBase64 ? '<img src="' + d.logoBase64 + '" class="societa-logo" alt="Logo">' : ''}
+    <div class="societa-nome">${d.societa?.nome || '—'}</div>
+    <div class="societa-dati">
+      ${d.societa?.codice_fiscale ? 'C.F.: ' + d.societa.codice_fiscale : ''}
+      ${d.societa?.partita_iva ? ' | P.IVA: ' + d.societa.partita_iva : ''}<br>
+      ${socIndirizzo}<br>
+      ${socContatti}
+    </div>
+  </div>
+  <div class="ricevuta-box">
+    <div class="ricevuta-tipo">${d.tipoDoc}</div>
+    <div class="ricevuta-numero">N. ${d.numeroRicevuta || '—'}</div>
+    <div class="ricevuta-data">Data: ${formatDataIT(d.dataEmissione)}</div>
+  </div>
+</div>
+
+<div class="sezione">
+  <div class="sezione-titolo">Ricevuto da</div>
+  <div class="sezione-riga"><span class="label">Intestatario</span><span class="valore">${d.intestatoNome || '—'}</span></div>
+  ${d.intestatoCf ? '<div class="sezione-riga"><span class="label">Codice Fiscale</span><span class="valore">' + d.intestatoCf + '</span></div>' : ''}
+  ${d.atleta ? '<div class="sezione-riga"><span class="label">Atleta</span><span class="valore">' + d.atleta.cognome + ' ' + d.atleta.nome + '</span></div>' : ''}
+</div>
+
+<div class="importo-box">
+  <div class="importo-label">Importo ricevuto</div>
+  <div class="importo-valore">${formatEuroIT(d.importo)}</div>
+</div>
+
+<div class="sezione">
+  <div class="sezione-titolo">Dettaglio pagamento</div>
+  <div class="sezione-riga"><span class="label">Causale</span><span class="valore">${d.causale}</span></div>
+  <div class="sezione-riga"><span class="label">Metodo di pagamento</span><span class="valore">${d.metodo}</span></div>
+  <div class="sezione-riga"><span class="label">Data pagamento</span><span class="valore">${formatDataIT(d.dataEmissione)}</span></div>
+  ${d.note ? '<div class="sezione-riga"><span class="label">Note</span><span class="valore">' + d.note + '</span></div>' : ''}
+</div>
+
+<div class="firma">
+  <div class="firma-box">
+    <div class="firma-linea">Firma del pagante</div>
+  </div>
+  <div class="firma-box">
+    <div class="firma-linea">Firma e timbro ${d.societa?.nome || ''}</div>
+  </div>
+</div>
+
+${disclaimerAsd}
+
+</body>
+</html>`
+}
+
+
+// ============================================================
+// CONFIGURAZIONE SOCIETA
+// ============================================================
+let currentSocietaEditId = null;
+
+async function apriModalSocieta(societaId) {
+  currentSocietaEditId = societaId;
+
+  const { data: soc } = await sb.from('societa')
+    .select('*')
+    .eq('id', societaId)
+    .single();
+
+  if (!soc) { toast('Società non trovata', 'error'); return; }
+
+  document.getElementById('soc-nome').value = soc.nome || '';
+  document.getElementById('soc-tipo').value = soc.tipo || 'asd';
+  document.getElementById('soc-cf').value = soc.codice_fiscale || '';
+  document.getElementById('soc-piva').value = soc.partita_iva || '';
+  document.getElementById('soc-indirizzo').value = soc.indirizzo || '';
+  document.getElementById('soc-comune').value = soc.comune || '';
+  document.getElementById('soc-provincia').value = soc.provincia || '';
+  document.getElementById('soc-cap').value = soc.cap || '';
+  document.getElementById('soc-telefono').value = soc.telefono || '';
+  document.getElementById('soc-email').value = soc.email || '';
+  document.getElementById('soc-pec').value = soc.pec || '';
+  document.getElementById('soc-testo-ricevuta').value = soc.testo_ricevuta || 'Ricevuta di pagamento quota sportiva';
+
+  // Mostra logo attuale
+  const preview = document.getElementById('soc-logo-preview');
+  if (soc.logo_url) {
+    preview.innerHTML = '<img src="' + soc.logo_url + '" style="max-height:60px;max-width:200px;border:1px solid var(--border);border-radius:4px;padding:4px;background:#fff;">';
+  } else {
+    preview.innerHTML = '<span style="color:var(--text3);font-size:12px;">Nessun logo caricato</span>';
+  }
+  document.getElementById('soc-logo-file').value = '';
+
+  document.getElementById('modal-societa').classList.add('open');
+}
+
+function chiudiModalSocieta() {
+  document.getElementById('modal-societa').classList.remove('open');
+}
+
+async function salvaSocieta() {
+  const nome = document.getElementById('soc-nome').value.trim().toUpperCase();
+  if (!nome) { toast('Inserisci il nome della società', 'error'); return; }
+
+  const btn = document.querySelector('#modal-societa .btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    let logoUrl = null;
+
+    // Upload logo se selezionato
+    const fileInput = document.getElementById('soc-logo-file');
+    if (fileInput.files && fileInput.files[0]) {
+      const file = fileInput.files[0];
+      const ext = file.name.split('.').pop().toLowerCase();
+      const fileName = currentSocietaEditId + '.' + ext;
+
+      const { error: uploadError } = await sb.storage
+        .from('loghi_societa')
+        .upload(fileName, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) throw new Error('Errore upload logo: ' + uploadError.message);
+
+      const { data: urlData } = sb.storage
+        .from('loghi_societa')
+        .getPublicUrl(fileName);
+
+      logoUrl = urlData.publicUrl + '?t=' + Date.now();
+    }
+
+    const updateData = {
+      nome,
+      tipo: document.getElementById('soc-tipo').value,
+      codice_fiscale: document.getElementById('soc-cf').value.trim().toUpperCase() || null,
+      partita_iva: document.getElementById('soc-piva').value.trim() || null,
+      indirizzo: document.getElementById('soc-indirizzo').value.trim().toUpperCase() || null,
+      comune: document.getElementById('soc-comune').value.trim().toUpperCase() || null,
+      provincia: document.getElementById('soc-provincia').value.trim().toUpperCase() || null,
+      cap: document.getElementById('soc-cap').value.trim() || null,
+      telefono: document.getElementById('soc-telefono').value.trim() || null,
+      email: document.getElementById('soc-email').value.trim() || null,
+      pec: document.getElementById('soc-pec').value.trim() || null,
+      testo_ricevuta: document.getElementById('soc-testo-ricevuta').value.trim() || 'Ricevuta di pagamento quota sportiva',
+    };
+
+    if (logoUrl) updateData.logo_url = logoUrl;
+
+    const { error } = await sb.from('societa').update(updateData).eq('id', currentSocietaEditId);
+    if (error) throw new Error(error.message);
+
+    toast('Configurazione salvata!', 'success');
+    chiudiModalSocieta();
+    loadSocieta();
+    loadSocietaList();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Salva configurazione';
+  }
+}
+
+async function loadSocietaList() {
+  const { data } = await sb.from('societa').select('*').order('nome');
+  const tbody = document.getElementById('tbody-societa');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🏢</div><p>Nessuna società</p></div></td></tr>';
+    return;
+  }
+  const tipi = { asd: 'ASD', ssd: 'SSD', srl: 'S.r.l.', altro: 'Altro' };
+  tbody.innerHTML = data.map(s => `<tr>
+    <td><strong>${s.nome}</strong></td>
+    <td><span class="badge badge-gray">${tipi[s.tipo] || s.tipo || '—'}</span></td>
+    <td style="font-family:var(--mono)">${s.codice_fiscale || '—'}</td>
+    <td>${s.comune || '—'}</td>
+    <td>${s.telefono || '—'}</td>
+    <td>${s.email || '—'}</td>
+    <td><button class="btn btn-sm btn-primary" onclick="apriModalSocieta('${s.id}')">⚙️ Configura</button></td>
+  </tr>`).join('');
+}
+
+
+// ============================================================
+// GESTIONE DOCUMENTI
+// ============================================================
+let currentDocAtletaId = null;
+let docIdEsistente = null;
+let docIstanzaEsistente = null;
+let docCertEsistente = null;
+
+function gestisciDocClick(btn) {
+  const atletaId = btn.getAttribute('data-id');
+  const atletaNome = btn.getAttribute('data-nome');
+  apriModalDocumento(atletaId, atletaNome);
+}
+
+async function apriModalDocumento(atletaId, atletaNome) {
+  currentDocAtletaId = atletaId;
+  docIdEsistente = null;
+  docIstanzaEsistente = null;
+  docCertEsistente = null;
+
+  document.getElementById('modal-doc-title').textContent = 'Documenti — ' + atletaNome;
+  document.getElementById('modal-doc-sub').textContent = atletaNome;
+  document.getElementById('doc-numero').value = '';
+  document.getElementById('doc-scadenza-id').value = '';
+  document.getElementById('doc-scadenza-cert').value = '';
+  document.getElementById('doc-file-id').value = '';
+  document.getElementById('doc-file-cert').value = '';
+  document.getElementById('doc-note').value = '';
+  document.getElementById('doc-id-attuale').style.display = 'none';
+  document.getElementById('doc-istanza-attuale').style.display = 'none';
+  document.getElementById('doc-cert-attuale').style.display = 'none';
+  document.getElementById('doc-cert-alert').style.display = 'none';
+  document.getElementById('doc-data-istanza').value = '';
+  document.getElementById('doc-file-istanza').value = '';
+
+  // Carica documenti esistenti
+  const { data: docs } = await sb.from('documento')
+    .select('*')
+    .eq('atleta_id', atletaId);
+
+  if (docs) {
+    // Documento identità
+    const docId = docs.find(d => ['carta_identita','passaporto','patente','altro'].includes(d.tipo));
+    if (docId) {
+      docIdEsistente = docId;
+      document.getElementById('doc-tipo-id').value = docId.tipo;
+      document.getElementById('doc-numero').value = docId.file_nome?.split('_')[0] || '';
+      if (docId.data_scadenza) document.getElementById('doc-scadenza-id').value = docId.data_scadenza;
+      document.getElementById('doc-id-attuale').style.display = 'block';
+      document.getElementById('doc-id-attuale-info').textContent =
+        docId.tipo.replace(/_/g,' ') + (docId.data_scadenza ? ' — Scade: ' + new Date(docId.data_scadenza + 'T00:00:00').toLocaleDateString('it-IT') : '');
+    }
+
+    // Istanza visita medica
+    const docIstanza = docs.find(d => d.tipo === 'istanza_visita');
+    if (docIstanza) {
+      docIstanzaEsistente = docIstanza;
+      if (docIstanza.data_emissione) document.getElementById('doc-data-istanza').value = docIstanza.data_emissione;
+      else if (docIstanza.data_scadenza) document.getElementById('doc-data-istanza').value = docIstanza.data_scadenza;
+      document.getElementById('doc-istanza-attuale').style.display = 'block';
+      document.getElementById('doc-istanza-attuale-info').textContent =
+        'Caricata' + (docIstanza.data_emissione ? ' il ' + new Date(docIstanza.data_emissione + 'T00:00:00').toLocaleDateString('it-IT') : '');
+    }
+
+    // Certificato medico
+    const docCert = docs.find(d => d.tipo === 'certificato_medico');
+    if (docCert) {
+      docCertEsistente = docCert;
+      if (docCert.data_scadenza) {
+        document.getElementById('doc-scadenza-cert').value = docCert.data_scadenza;
+        // Alert scadenza
+        const oggi = new Date();
+        const scad = new Date(docCert.data_scadenza + 'T00:00:00');
+        const giorni = Math.round((scad - oggi) / 86400000);
+        const alert = document.getElementById('doc-cert-alert');
+        alert.style.display = 'block';
+        if (giorni < 0) {
+          alert.style.background = 'rgba(224,92,92,0.1)';
+          alert.style.border = '1px solid rgba(224,92,92,0.3)';
+          alert.style.color = 'var(--danger)';
+          alert.textContent = '⚠ Certificato SCADUTO da ' + Math.abs(giorni) + ' giorni';
+        } else if (giorni <= 30) {
+          alert.style.background = 'rgba(224,92,92,0.1)';
+          alert.style.border = '1px solid rgba(224,92,92,0.3)';
+          alert.style.color = 'var(--danger)';
+          alert.textContent = '⚠ Certificato in scadenza tra ' + giorni + ' giorni';
+        } else if (giorni <= 60) {
+          alert.style.background = 'rgba(232,168,74,0.1)';
+          alert.style.border = '1px solid rgba(232,168,74,0.3)';
+          alert.style.color = 'var(--warning)';
+          alert.textContent = '⚠ Certificato in scadenza tra ' + giorni + ' giorni';
+        } else {
+          alert.style.background = 'rgba(26,158,106,0.08)';
+          alert.style.border = '1px solid rgba(26,158,106,0.3)';
+          alert.style.color = 'var(--accent)';
+          alert.textContent = '✓ Certificato valido — scade il ' + scad.toLocaleDateString('it-IT');
+        }
+      }
+      document.getElementById('doc-cert-attuale').style.display = 'block';
+      document.getElementById('doc-cert-attuale-info').textContent =
+        'Caricato' + (docCert.data_scadenza ? ' — Scade: ' + new Date(docCert.data_scadenza + 'T00:00:00').toLocaleDateString('it-IT') : '');
+    }
+  }
+
+  document.getElementById('modal-documento').classList.add('open');
+}
+
+function chiudiModalDocumento() {
+  document.getElementById('modal-documento').classList.remove('open');
+}
+
+async function uploadDocumento(file, atletaId, tipo) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const fileName = atletaId + '/' + tipo + '.' + ext;
+  const { error } = await sb.storage
+    .from('documenti-atleti')
+    .upload(fileName, file, { upsert: true, contentType: file.type });
+  if (error) throw new Error('Errore upload: ' + error.message);
+  return fileName;
+}
+
+async function eliminaDocumento(tipo) {
+  const doc = tipo === 'identita' ? docIdEsistente : tipo === 'istanza' ? docIstanzaEsistente : docCertEsistente;
+  if (!doc) { toast('Nessun documento da eliminare', 'error'); return; }
+
+  if (!confirm('Sei sicuro di voler eliminare questo documento? Operazione non reversibile.')) return;
+
+  try {
+    // Elimina file dallo storage se presente
+    if (doc.file_path) {
+      await sb.storage.from('documenti-atleti').remove([doc.file_path]);
+    }
+    // Elimina record dal database
+    const { error } = await sb.from('documento').delete().eq('id', doc.id);
+    if (error) throw new Error(error.message);
+
+    toast('Documento eliminato', 'success');
+
+    // Aggiorna UI
+    if (tipo === 'identita') {
+      docIdEsistente = null;
+      document.getElementById('doc-id-attuale').style.display = 'none';
+      document.getElementById('doc-numero').value = '';
+      document.getElementById('doc-scadenza-id').value = '';
+    } else if (tipo === 'istanza') {
+      docIstanzaEsistente = null;
+      document.getElementById('doc-istanza-attuale').style.display = 'none';
+      document.getElementById('doc-data-istanza').value = '';
+    } else {
+      docCertEsistente = null;
+      document.getElementById('doc-cert-attuale').style.display = 'none';
+      document.getElementById('doc-scadenza-cert').value = '';
+      document.getElementById('doc-cert-alert').style.display = 'none';
+    }
+    loadDocumenti();
+    loadDashboard();
+
+  } catch(e) {
+    toast('Errore eliminazione: ' + e.message, 'error');
+  }
+}
+
+async function scaricaDocumento(tipo) {
+  const doc = tipo === 'identita' ? docIdEsistente : tipo === 'istanza' ? docIstanzaEsistente : docCertEsistente;
+  if (!doc?.file_path) { toast('File non disponibile', 'error'); return; }
+  const { data, error } = await sb.storage
+    .from('documenti-atleti')
+    .createSignedUrl(doc.file_path, 60);
+  if (error) { toast('Errore download: ' + error.message, 'error'); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
+async function salvaDocumenti() {
+  if (!currentDocAtletaId) return;
+  const btn = document.querySelector('#modal-documento .btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    const note = document.getElementById('doc-note').value.trim() || null;
+
+    // --- DOCUMENTO IDENTITA ---
+    const fileId = document.getElementById('doc-file-id').files[0];
+    const tipoId = document.getElementById('doc-tipo-id').value;
+    const scadId = document.getElementById('doc-scadenza-id').value || null;
+    const numero = document.getElementById('doc-numero').value.trim().toUpperCase() || null;
+
+    if (fileId || (tipoId && !docIdEsistente)) {
+      let filePath = docIdEsistente?.file_path || null;
+      let fileNome = docIdEsistente?.file_nome || null;
+
+      if (fileId) {
+        filePath = await uploadDocumento(fileId, currentDocAtletaId, tipoId);
+        fileNome = (numero || tipoId) + '_' + fileId.name;
+      }
+
+      const docData = {
+        atleta_id: currentDocAtletaId,
+        tipo: tipoId,
+        file_path: filePath,
+        file_nome: fileNome,
+        data_scadenza: scadId,
+        valido: scadId ? new Date(scadId) >= new Date() : true,
+        note,
+      };
+
+      if (docIdEsistente) {
+        await sb.from('documento').update(docData).eq('id', docIdEsistente.id);
+      } else if (fileId) {
+        await sb.from('documento').insert(docData);
+      }
+    }
+
+    // --- ISTANZA VISITA MEDICA ---
+    const fileIstanza = document.getElementById('doc-file-istanza').files[0];
+    const dataIstanza = document.getElementById('doc-data-istanza').value || null;
+
+    if (fileIstanza || (dataIstanza && !docIstanzaEsistente)) {
+      let filePathIstanza = docIstanzaEsistente?.file_path || null;
+      let fileNomeIstanza = docIstanzaEsistente?.file_nome || null;
+
+      if (fileIstanza) {
+        filePathIstanza = await uploadDocumento(fileIstanza, currentDocAtletaId, 'istanza_visita');
+        fileNomeIstanza = fileIstanza.name;
+      }
+
+      const istanzaData = {
+        atleta_id: currentDocAtletaId,
+        tipo: 'istanza_visita',
+        file_path: filePathIstanza,
+        file_nome: fileNomeIstanza,
+        data_emissione: dataIstanza,
+        valido: true,
+        note,
+      };
+
+      if (docIstanzaEsistente) {
+        await sb.from('documento').update(istanzaData).eq('id', docIstanzaEsistente.id);
+      } else if (fileIstanza || dataIstanza) {
+        await sb.from('documento').insert(istanzaData);
+      }
+    }
+
+    // --- CERTIFICATO MEDICO ---
+    const fileCert = document.getElementById('doc-file-cert').files[0];
+    const scadCert = document.getElementById('doc-scadenza-cert').value || null;
+
+    if (!scadCert && fileCert) { toast('Inserisci la data di scadenza del certificato medico', 'error'); btn.disabled = false; btn.textContent = '💾 Salva documenti'; return; }
+
+    if (fileCert || scadCert) {
+      let filePathCert = docCertEsistente?.file_path || null;
+      let fileNomeCert = docCertEsistente?.file_nome || null;
+
+      if (fileCert) {
+        filePathCert = await uploadDocumento(fileCert, currentDocAtletaId, 'certificato_medico');
+        fileNomeCert = fileCert.name;
+      }
+
+      const certData = {
+        atleta_id: currentDocAtletaId,
+        tipo: 'certificato_medico',
+        file_path: filePathCert,
+        file_nome: fileNomeCert,
+        data_scadenza: scadCert,
+        valido: scadCert ? new Date(scadCert) >= new Date() : true,
+        note,
+      };
+
+      if (docCertEsistente) {
+        await sb.from('documento').update(certData).eq('id', docCertEsistente.id);
+      } else {
+        await sb.from('documento').insert(certData);
+      }
+    }
+
+    toast('Documenti salvati con successo!', 'success');
+    chiudiModalDocumento();
+    loadDocumenti();
+    loadDashboard();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Salva documenti';
+  }
+}
+
+
+// ============================================================
+// SCHEDA ATLETA
+// ============================================================
+let schedaAtletaId = null;
+let schedaAtletaNome = '';
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function chiudiSchedaAtleta() {
+  document.getElementById('scheda-atleta').classList.remove('open');
+}
+
+async function apriSchedaAtleta(id, nome) {
+  schedaAtletaId = id;
+  schedaAtletaNome = nome;
+
+  // Reset tab ad anagrafica
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-anagrafica').classList.add('active');
+  document.querySelector('.tab-btn').classList.add('active');
+
+  document.getElementById('sa-nome').textContent = nome;
+  const avatarEl = document.getElementById('sa-avatar');
+  avatarEl.textContent = nome.charAt(0).toUpperCase();
+  avatarEl.style.backgroundImage = '';
+  document.getElementById('sa-badges').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  document.getElementById('sa-dati-personali').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  document.getElementById('scheda-atleta').classList.add('open');
+
+  // Carica dati atleta
+  const { data: a } = await sb.from('atleta').select('*').eq('id', id).single();
+  if (!a) { chiudiSchedaAtleta(); toast('Atleta non trovato', 'error'); return; }
+
+  // Carica iscrizione attiva
+  const { data: isc } = await sb.from('iscrizione')
+    .select('stato, tariffa(nome), iscrizione_gruppo(principale, gruppo(nome, societa(nome)))')
+    .eq('atleta_id', id)
+    .eq('stagione_id', currentStagioneId)
+    .single();
+
+  // Foto profilo
+  const avatarEl2 = document.getElementById('sa-avatar');
+  const btnElFoto = document.getElementById('btn-elimina-foto');
+  if (a.foto_url) {
+    avatarEl2.style.backgroundImage = 'url(' + a.foto_url + ')';
+    avatarEl2.textContent = '';
+    btnElFoto.style.display = 'flex';
+  } else {
+    avatarEl2.style.backgroundImage = '';
+    avatarEl2.textContent = nome.charAt(0).toUpperCase();
+    btnElFoto.style.display = 'none';
+  }
+
+  // Badges
+  const badges = [];
+  if (isc) {
+    const gruppo = isc.iscrizione_gruppo?.find(g => g.principale)?.gruppo || isc.iscrizione_gruppo?.[0]?.gruppo;
+    if (gruppo?.societa?.nome) badges.push('<span class="badge badge-gray">' + gruppo.societa.nome + '</span>');
+    if (gruppo?.nome) badges.push('<span class="badge badge-gray">' + gruppo.nome + '</span>');
+    badges.push('<span class="badge ' + (isc.stato === 'attiva' ? 'badge-green' : 'badge-yellow') + '">' + (isc.stato || '—') + '</span>');
+  }
+  badges.push('<span class="badge ' + (a.maggiorenne ? 'badge-gray' : 'badge-green') + '">' + (a.maggiorenne ? 'Maggiorenne' : 'Minorenne') + '</span>');
+  document.getElementById('sa-badges').innerHTML = badges.join('');
+
+  // Dati personali
+  const fmt = v => v || '<span style="color:var(--text3)">—</span>';
+  const fmtData = v => v ? new Date(v + 'T00:00:00').toLocaleDateString('it-IT') : '<span style="color:var(--text3)">—</span>';
+  const rows = [
+    ['Cognome', fmt(a.cognome)], ['Nome', fmt(a.nome)],
+    ['Codice Fiscale', a.codice_fiscale ? '<span style="font-family:var(--mono)">' + a.codice_fiscale + '</span>' : fmt(null)],
+    ['Data di nascita', fmtData(a.data_nascita)],
+    ['Sesso', fmt(a.sesso)],
+    ['Comune di nascita', fmt(a.comune_nascita)],
+    ['Provincia di nascita', fmt(a.provincia_nascita)],
+    ['Indirizzo', fmt(a.indirizzo)],
+    ['Comune', fmt(a.comune)],
+    ['Provincia / CAP', (a.provincia || '—') + (a.cap ? ' — ' + a.cap : '')],
+    ['Telefono', fmt(a.telefono)],
+    ['Email', fmt(a.email)],
+  ];
+  document.getElementById('sa-dati-personali').innerHTML = rows.map(([l,v]) =>
+    '<div class="info-label">' + l + '</div><div class="info-value">' + v + '</div>'
+  ).join('');
+
+  // Genitori se minorenne
+  const sezioneGen = document.getElementById('sa-sezione-genitori');
+  if (!a.maggiorenne) {
+    const { data: genitori } = await sb.from('atleta_genitore')
+      .select('relazione, referente_principale, genitore(cognome, nome, codice_fiscale, telefono, email)')
+      .eq('atleta_id', id);
+    if (genitori && genitori.length > 0) {
+      let html = '<div class="sezione-titolo-scheda">Genitori / Tutori</div>';
+      genitori.forEach(g => {
+        html += '<div class="info-grid" style="margin-bottom:10px;">';
+        html += '<div class="info-label">Nome</div><div class="info-value">' + (g.genitore?.cognome || '') + ' ' + (g.genitore?.nome || '') + (g.referente_principale ? ' ★' : '') + '</div>';
+        html += '<div class="info-label">Relazione</div><div class="info-value">' + (g.relazione || '—') + '</div>';
+        if (g.genitore?.codice_fiscale) html += '<div class="info-label">C.F.</div><div class="info-value"><span style="font-family:var(--mono)">' + g.genitore.codice_fiscale + '</span></div>';
+        if (g.genitore?.telefono) html += '<div class="info-label">Telefono</div><div class="info-value">' + g.genitore.telefono + '</div>';
+        if (g.genitore?.email) html += '<div class="info-label">Email</div><div class="info-value">' + g.genitore.email + '</div>';
+        html += '</div>';
+      });
+      sezioneGen.innerHTML = html;
+    } else {
+      sezioneGen.innerHTML = '';
+    }
+  } else {
+    sezioneGen.innerHTML = '';
+  }
+
+  // Nota
+  document.getElementById('sa-note').value = a.note || '';
+
+  // Carica documenti tab
+  await caricaDocumentiScheda(id);
+
+  // Carica pagamenti tab
+  await caricaPagamentiScheda(id);
+
+  // Bottone carica documenti
+  document.getElementById('sa-btn-carica-doc').onclick = () => {
+    chiudiSchedaAtleta();
+    apriModalDocumento(id, nome);
+  };
+}
+
+async function caricaDocumentiScheda(atletaId) {
+  const { data: docs } = await sb.from('documento')
+    .select('*').eq('atleta_id', atletaId);
+
+  const container = document.getElementById('sa-documenti-list');
+  if (!docs || docs.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><p>Nessun documento caricato</p></div>';
+    return;
+  }
+
+  const icons = { carta_identita: '🪪', passaporto: '🛂', patente: '🚗', certificato_medico: '🏥', istanza_visita: '📝', altro: '📄' };
+  const nomi = { carta_identita: 'Carta d Identita', passaporto: 'Passaporto', patente: 'Patente di guida', certificato_medico: 'Certificato medico', istanza_visita: 'Istanza visita medica', altro: 'Documento' };
+  const oggi = new Date();
+
+  container.innerHTML = docs.map(d => {
+    const scad = d.data_scadenza ? new Date(d.data_scadenza + 'T00:00:00') : null;
+    const giorni = scad ? Math.round((scad - oggi) / 86400000) : null;
+    let badgeHtml = '';
+    if (scad) {
+      if (giorni < 0) badgeHtml = '<span class="badge badge-red">Scaduto</span>';
+      else if (giorni <= 30) badgeHtml = '<span class="badge badge-red">' + giorni + ' gg</span>';
+      else if (giorni <= 60) badgeHtml = '<span class="badge badge-yellow">' + giorni + ' gg</span>';
+      else badgeHtml = '<span class="badge badge-green">Valido</span>';
+    }
+    const scadText = scad ? 'Scade: ' + scad.toLocaleDateString('it-IT') : (d.data_emissione ? 'Data: ' + new Date(d.data_emissione + 'T00:00:00').toLocaleDateString('it-IT') : 'Nessuna scadenza');
+    return '<div class="doc-card">' +
+      '<div class="doc-icon">' + (icons[d.tipo] || '📄') + '</div>' +
+      '<div class="doc-info">' +
+        '<div class="doc-tipo">' + (nomi[d.tipo] || d.tipo) + '</div>' +
+        '<div class="doc-dettaglio">' + scadText + ' ' + badgeHtml + '</div>' +
+      '</div>' +
+      '<div class="doc-actions">' +
+        (d.file_path ? '<button class="btn btn-sm btn-secondary" onclick="scaricaDocumentoById(\''+d.id+'\',\''+d.file_path+'\')">⬇</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function caricaPagamentiScheda(atletaId) {
+  const { data: isc } = await sb.from('iscrizione')
+    .select('id').eq('atleta_id', atletaId).eq('stagione_id', currentStagioneId).single();
+
+  const container = document.getElementById('sa-pagamenti-list');
+  if (!isc) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">💳</div><p>Nessuna iscrizione nella stagione corrente</p></div>';
+    return;
+  }
+
+  const { data: pags } = await sb.from('pagamento')
+    .select('*').eq('iscrizione_id', isc.id).order('data_scadenza');
+
+  if (!pags || pags.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">💳</div><p>Nessuna rata generata</p></div>';
+    return;
+  }
+
+  const oggi = new Date();
+  let totPagato = 0, totDovuto = 0;
+
+  const rows = pags.map(p => {
+    const scad = p.data_scadenza ? new Date(p.data_scadenza + 'T00:00:00') : null;
+    const inRitardo = scad && !p.pagato && scad < oggi;
+    totDovuto += parseFloat(p.importo) || 0;
+    if (p.pagato) totPagato += parseFloat(p.importo) || 0;
+    let stato = p.pagato
+      ? '<span class="badge badge-green">✓ Pagato</span>'
+      : inRitardo ? '<span class="badge badge-red">Scaduto</span>'
+      : '<span class="badge badge-yellow">In attesa</span>';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">' +
+      '<div><div style="font-size:13px;font-weight:500">' + (p.tipo === 'iscrizione' ? 'Quota iscrizione' : 'Rata — ' + (scad ? scad.toLocaleDateString('it-IT',{month:'long',year:'numeric'}) : '')) + '</div>' +
+      (p.numero_ricevuta ? '<div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Ric. ' + p.numero_ricevuta + '</div>' : '') + '</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+      stato +
+      '<span style="font-family:var(--mono);font-weight:600">€ ' + parseFloat(p.importo).toFixed(2).replace('.',',') + '</span>' +
+      '</div></div>';
+  }).join('');
+
+  const saldo = totDovuto - totPagato;
+  container.innerHTML = rows +
+    '<div style="display:flex;justify-content:space-between;padding:12px 0;font-weight:600;border-top:2px solid var(--border);margin-top:4px;">' +
+    '<span>Totale stagione</span>' +
+    '<span style="font-family:var(--mono)">€ ' + totPagato.toFixed(2).replace('.',',') + ' / € ' + totDovuto.toFixed(2).replace('.',',') + '</span></div>' +
+    (saldo > 0 ? '<div style="background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--danger);margin-top:8px;">Saldo residuo: € ' + saldo.toFixed(2).replace('.',',') + '</div>' : '');
+}
+
+async function uploadFotoAtleta(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const ext = file.name.split('.').pop().toLowerCase();
+  const fileName = schedaAtletaId + '.' + ext;
+
+  const btn = document.getElementById('sa-avatar');
+  btn.textContent = '⏳';
+  btn.style.backgroundImage = '';
+
+  try {
+    // Upload su Storage
+    const { error: uploadError } = await sb.storage
+      .from('foto-atleti')
+      .upload(fileName, file, { upsert: true, contentType: file.type });
+    if (uploadError) throw new Error(uploadError.message);
+
+    // Ottieni URL pubblico
+    const { data: urlData } = sb.storage.from('foto-atleti').getPublicUrl(fileName);
+    const fotoUrl = urlData.publicUrl + '?t=' + Date.now();
+
+    // Aggiorna database
+    const { error } = await sb.from('atleta').update({ foto_url: fotoUrl }).eq('id', schedaAtletaId);
+    if (error) throw new Error(error.message);
+
+    // Mostra foto
+    btn.style.backgroundImage = 'url(' + fotoUrl + ')';
+    btn.textContent = '';
+    document.getElementById('btn-elimina-foto').style.display = 'flex';
+    toast('Foto aggiornata!', 'success');
+    loadAtleti();
+
+  } catch(e) {
+    toast('Errore upload foto: ' + e.message, 'error');
+    btn.textContent = schedaAtletaNome.charAt(0).toUpperCase();
+  }
+  input.value = '';
+}
+
+async function eliminaFotoAtleta() {
+  if (!confirm('Eliminare la foto profilo?')) return;
+  try {
+    // Recupera url attuale per sapere il nome file
+    const { data: a } = await sb.from('atleta').select('foto_url').eq('id', schedaAtletaId).single();
+    if (a?.foto_url) {
+      // Estrai nome file dall'URL
+      const parts = a.foto_url.split('/');
+      const fileName = parts[parts.length - 1].split('?')[0];
+      await sb.storage.from('foto-atleti').remove([schedaAtletaId + '.' + fileName.split('.').pop()]);
+    }
+    // Aggiorna database
+    await sb.from('atleta').update({ foto_url: null }).eq('id', schedaAtletaId);
+
+    // Aggiorna UI
+    const avatarEl = document.getElementById('sa-avatar');
+    avatarEl.style.backgroundImage = '';
+    avatarEl.textContent = schedaAtletaNome.charAt(0).toUpperCase();
+    document.getElementById('btn-elimina-foto').style.display = 'none';
+    toast('Foto eliminata', 'success');
+    loadAtleti();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function salvaNotaAtleta() {
+  const nota = document.getElementById('sa-note').value;
+  const { error } = await sb.from('atleta').update({ note: nota }).eq('id', schedaAtletaId);
+  if (error) { toast('Errore salvataggio nota', 'error'); return; }
+  toast('Nota salvata', 'success');
+}
+
+// ============================================================
+// TEMA
+// ============================================================
+function initTema() {
+  const tema = localStorage.getItem('tema') || 'light';
+  if (tema === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('btn-tema').textContent = '🌙';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    document.getElementById('btn-tema').textContent = '☀️';
+  }
+}
+
+document.getElementById('btn-tema').addEventListener('click', () => {
+  const isDark = document.documentElement.hasAttribute('data-theme');
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('tema', 'light');
+    document.getElementById('btn-tema').textContent = '☀️';
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('tema', 'dark');
+    document.getElementById('btn-tema').textContent = '🌙';
+  }
+});
+
+initTema();
+
+// Collegamento bottone nuovo atleta
+document.getElementById('btn-nuovo-atleta')?.addEventListener('click', apriModalAtleta);
+document.getElementById('btn-nuovo-gruppo')?.addEventListener('click', apriModalGruppo);
+document.getElementById('btn-nuovo-documento')?.addEventListener('click', () => {
+  toast('Seleziona un atleta dalla lista Atleti per caricare documenti', 'warning');
+});
+document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModalTariffa);
+
+
+
+// ============================================================
+// AVVIO: controlla sessione esistente
+// ============================================================
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) {
+    await initApp(session.user);
+  }
+})();
+</script>
+
+<!-- ============================================================
+     MODAL NUOVO ATLETA
+     ============================================================ -->
+<div class="modal-overlay" id="modal-atleta">
+  <div class="modal" style="max-width:660px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Registrazione atleta</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="modal-atleta-sub">Seleziona la società di appartenenza</div>
+      </div>
+      <button class="modal-close" onclick="chiudiModalAtleta()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- STEP INDICATOR -->
+      <div style="display:flex;align-items:center;margin-bottom:28px;">
+        <div class="step-dot active" id="sdot-1">1</div>
+        <div class="step-line" id="sline-1"></div>
+        <div class="step-dot" id="sdot-2">2</div>
+        <div class="step-line" id="sline-2"></div>
+        <div class="step-dot" id="sdot-3">3</div>
+        <div class="step-line" id="sline-3"></div>
+        <div class="step-dot" id="sdot-4">4</div>
+      </div>
+
+      <!-- STEP 1: SOCIETA -->
+      <div id="mstep-1">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">L'atleta sarà registrato per la società selezionata nella stagione corrente.</div>
+        <div class="field">
+          <label>Società *</label>
+          <select id="reg-societa" style="font-size:14px;padding:10px 12px;">
+            <option value="">— Seleziona società —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Stagione corrente</label>
+          <input type="text" id="reg-stagione-label" disabled style="background:var(--bg3);color:var(--text2);">
+        </div>
+      </div>
+
+      <!-- STEP 2: DATI ATLETA -->
+      <div id="mstep-2" style="display:none;">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">I campi con * sono obbligatori.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="field"><label>Cognome *</label><input type="text" id="a-cognome" placeholder="ROSSI" style="text-transform:uppercase"></div>
+          <div class="field"><label>Nome *</label><input type="text" id="a-nome" placeholder="MARIO" style="text-transform:uppercase"></div>
+          <div class="field"><label>Data di nascita *</label><input type="date" id="a-nascita"></div>
+          <div class="field"><label>Sesso</label>
+            <select id="a-sesso"><option value="">— Seleziona —</option><option value="M">Maschio</option><option value="F">Femmina</option><option value="altro">Altro</option></select>
+          </div>
+          <div class="field"><label>Codice Fiscale</label><input type="text" id="a-cf" maxlength="16" style="text-transform:uppercase" placeholder="RSSMRA00A01F205X"></div>
+          <div class="field"><label>Comune di nascita</label><input type="text" id="a-comune-nascita" style="text-transform:uppercase" placeholder="MOLFETTA"></div>
+          <div class="field"><label>Provincia nascita</label><input type="text" id="a-prov-nascita" maxlength="2" style="text-transform:uppercase" placeholder="BA"></div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:14px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Residenza</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="field" style="grid-column:1/-1"><label>Indirizzo</label><input type="text" id="a-indirizzo" style="text-transform:uppercase" placeholder="VIA ROMA, 1"></div>
+          <div class="field"><label>Comune</label><input type="text" id="a-comune" style="text-transform:uppercase" placeholder="MOLFETTA"></div>
+          <div class="field"><label>Provincia</label><input type="text" id="a-provincia" maxlength="2" style="text-transform:uppercase" placeholder="BA"></div>
+          <div class="field"><label>CAP</label><input type="text" id="a-cap" maxlength="5" placeholder="70056"></div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:14px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Contatti</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="field"><label>Telefono</label><input type="tel" id="a-telefono" placeholder="333 1234567"></div>
+          <div class="field"><label>Email</label><input type="email" id="a-email" placeholder="mario@email.com"></div>
+        </div>
+        <div class="field"><label>Note</label><textarea id="a-note" placeholder="Eventuali note..."></textarea></div>
+        <div id="alert-minorenne" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--accent);">
+          ℹ️ L'atleta è <strong>minorenne</strong> — nel passo successivo inserisci i dati del genitore/tutore.
+        </div>
+      </div>
+
+      <!-- STEP 3: GENITORE -->
+      <div id="mstep-3" style="display:none;">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">Almeno un genitore o tutore è obbligatorio per atleti minorenni.</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Genitore / Tutore 1 <span style="color:var(--danger)">*</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="field"><label>Cognome *</label><input type="text" id="g1-cognome" style="text-transform:uppercase" placeholder="ROSSI"></div>
+          <div class="field"><label>Nome *</label><input type="text" id="g1-nome" style="text-transform:uppercase" placeholder="GIUSEPPE"></div>
+          <div class="field"><label>Codice Fiscale</label><input type="text" id="g1-cf" maxlength="16" style="text-transform:uppercase"></div>
+          <div class="field"><label>Relazione</label>
+            <select id="g1-relazione"><option value="padre">Padre</option><option value="madre">Madre</option><option value="tutore">Tutore legale</option><option value="altro">Altro</option></select>
+          </div>
+          <div class="field"><label>Telefono *</label><input type="tel" id="g1-telefono" placeholder="333 1234567"></div>
+          <div class="field"><label>Email</label><input type="email" id="g1-email"></div>
+          <div class="field" style="grid-column:1/-1"><label>Indirizzo</label><input type="text" id="g1-indirizzo" style="text-transform:uppercase"></div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:14px 0 12px;padding-top:12px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Intestazione ricevute fiscali</div>
+          <div class="field"><label>Intestare le ricevute a *</label>
+            <select id="intestazione-ricevute"><option value="g1">Genitore / Tutore 1</option></select>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:14px 0;padding-top:12px;">
+          <button type="button" id="btn-aggiungi-g2" class="btn btn-secondary" style="width:100%">+ Aggiungi secondo genitore (opzionale)</button>
+        </div>
+        <div id="sezione-g2" style="display:none;">
+          <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Genitore / Tutore 2</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field"><label>Cognome</label><input type="text" id="g2-cognome" style="text-transform:uppercase"></div>
+            <div class="field"><label>Nome</label><input type="text" id="g2-nome" style="text-transform:uppercase"></div>
+            <div class="field"><label>Codice Fiscale</label><input type="text" id="g2-cf" maxlength="16" style="text-transform:uppercase"></div>
+            <div class="field"><label>Relazione</label>
+              <select id="g2-relazione"><option value="madre">Madre</option><option value="padre">Padre</option><option value="tutore">Tutore legale</option><option value="altro">Altro</option></select>
+            </div>
+            <div class="field"><label>Telefono</label><input type="tel" id="g2-telefono"></div>
+            <div class="field"><label>Email</label><input type="email" id="g2-email"></div>
+            <div class="field" style="grid-column:1/-1"><label>Indirizzo</label><input type="text" id="g2-indirizzo" style="text-transform:uppercase"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4: RIEPILOGO -->
+      <div id="mstep-4" style="display:none;">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px;">Riepilogo registrazione</div>
+        <div id="riepilogo-content" style="background:var(--bg3);border-radius:var(--radius);padding:16px;font-size:13px;line-height:2;"></div>
+        <div style="margin-top:16px;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px 14px;font-size:13px;">
+          ✅ Controlla i dati e clicca <strong>Registra atleta</strong> per salvare.
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btn-ma-back" style="display:none" onclick="maStepBack()">← Indietro</button>
+      <button class="btn btn-secondary" onclick="chiudiModalAtleta()">Annulla</button>
+      <button class="btn btn-primary" id="btn-ma-next" onclick="maStepNext()">Avanti →</button>
+      <button class="btn btn-primary" id="btn-ma-salva" style="display:none" onclick="salvaAtleta()">💾 Registra atleta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUOVO GRUPPO -->
+<div class="modal-overlay" id="modal-gruppo">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">Nuovo gruppo / squadra</div>
+      <button class="modal-close" onclick="chiudiModalGruppo()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Società *</label>
+        <select id="gr-societa" style="font-size:14px;padding:10px 12px;">
+          <option value="">— Seleziona società —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Stagione</label>
+        <input type="text" id="gr-stagione-label" disabled style="background:var(--bg3);color:var(--text2);">
+      </div>
+      <div class="field">
+        <label>Nome gruppo *</label>
+        <input type="text" id="gr-nome" placeholder="ES. UNDER 15, SENIORES, AMATORI..." style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>Tipo</label>
+        <select id="gr-tipo">
+          <option value="agonistico">Agonistico</option>
+          <option value="giovanile">Giovanile</option>
+          <option value="amatoriale">Amatoriale</option>
+          <option value="promozionale">Promozionale</option>
+          <option value="altro">Altro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Prevede quota di iscrizione/mensile?</label>
+        <select id="gr-quota">
+          <option value="false">No — gruppo gratuito</option>
+          <option value="true">Sì — prevede quota</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Note</label>
+        <textarea id="gr-note" placeholder="Eventuali note sul gruppo..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalGruppo()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaGruppo()">💾 Salva gruppo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ASSEGNA ATLETA A GRUPPO -->
+<div class="modal-overlay" id="modal-assegna">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">Assegna atleta a gruppo</div>
+      <button class="modal-close" onclick="chiudiModalAssegna()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Gruppo *</label>
+        <select id="as-gruppo" style="font-size:14px;padding:10px 12px;">
+          <option value="">— Seleziona gruppo —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Atleta *</label>
+        <select id="as-atleta" style="font-size:14px;padding:10px 12px;">
+          <option value="">— Seleziona atleta —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Gruppo principale?</label>
+        <select id="as-principale">
+          <option value="true">Sì — gruppo principale</option>
+          <option value="false">No — gruppo secondario</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Data assegnazione</label>
+        <input type="date" id="as-data">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalAssegna()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaAssegnazione()">💾 Assegna</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUOVA TARIFFA -->
+<div class="modal-overlay" id="modal-tariffa">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">Nuova tariffa</div>
+      <button class="modal-close" onclick="chiudiModalTariffa()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Società *</label>
+        <select id="tar-societa" style="font-size:14px;padding:10px 12px;">
+          <option value="">— Seleziona società —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Stagione</label>
+        <input type="text" id="tar-stagione-label" disabled style="background:var(--bg3);color:var(--text2);">
+      </div>
+      <div class="field">
+        <label>Nome tariffa *</label>
+        <input type="text" id="tar-nome" placeholder="ES. GIOVANILI, AGONISTI, AMATORI..." style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>Descrizione</label>
+        <input type="text" id="tar-descrizione" placeholder="Descrizione opzionale">
+      </div>
+      <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Quote</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <label>Quota iscrizione (€)</label>
+          <input type="number" id="tar-iscrizione" placeholder="0.00" min="0" step="0.01" value="0">
+        </div>
+        <div class="field">
+          <label>Importo rata (€)</label>
+          <input type="number" id="tar-rata" placeholder="0.00" min="0" step="0.01" value="0">
+        </div>
+        <div class="field">
+          <label>Frequenza rata</label>
+          <select id="tar-frequenza">
+            <option value="nessuna">Nessuna rata</option>
+            <option value="mensile">Mensile</option>
+            <option value="trimestrale">Trimestrale</option>
+            <option value="semestrale">Semestrale</option>
+            <option value="annuale">Annuale</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Numero rate <span style="font-weight:400;text-transform:none;letter-spacing:0">(opzionale)</span></label>
+          <input type="number" id="tar-nrate" placeholder="0" min="0" step="1" value="0">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Lascia 0 per calcolare automaticamente le rate dalla data di iscrizione fino a giugno. Inserisci un numero per limitare le rate.</div>
+        </div>
+      </div>
+      <div id="tar-preview" style="background:var(--bg3);border-radius:var(--radius);padding:12px 14px;font-size:13px;margin-top:8px;display:none;">
+        <strong>Totale stimato:</strong> <span id="tar-totale">€ 0,00</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalTariffa()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaTariffa()">💾 Salva tariffa</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GESTIONE ISCRIZIONE -->
+<div class="modal-overlay" id="modal-iscrizione">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title">Assegna tariffa e genera rate</div>
+      <button class="modal-close" onclick="chiudiModalIscrizione()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg3);border-radius:var(--radius);padding:12px 14px;margin-bottom:20px;font-size:13px;">
+        <strong>Atleta:</strong> <span id="isc-atleta-nome">—</span><br>
+        <strong>Stagione:</strong> <span id="isc-stagione-nome">—</span><br>
+        <strong>Stato iscrizione:</strong> <span id="isc-stato-badge">—</span>
+      </div>
+
+      <div class="field">
+        <label>Tariffa *</label>
+        <select id="isc-tariffa" style="font-size:14px;padding:10px 12px;">
+          <option value="">— Seleziona tariffa —</option>
+        </select>
+      </div>
+
+      <div id="isc-tariffa-preview" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px 14px;font-size:13px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+          <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Iscrizione</div><div style="font-weight:600;font-family:var(--mono)" id="prev-isc">—</div></div>
+          <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Rata</div><div style="font-weight:600;font-family:var(--mono)" id="prev-rata">—</div></div>
+          <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Totale stagione</div><div style="font-weight:600;font-family:var(--mono);color:var(--accent)" id="prev-totale">—</div></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Data prima rata / iscrizione *</label>
+        <input type="date" id="isc-data-inizio">
+      </div>
+
+      <div class="field">
+        <label>Intestato a *</label>
+        <select id="isc-intestato" style="font-size:14px;padding:10px 12px;">
+          <option value="">— Seleziona —</option>
+        </select>
+      </div>
+
+      <div id="isc-preview-rate" style="display:none;">
+        <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Rate generate</div>
+        <div id="isc-lista-rate" style="font-size:13px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalIscrizione()">Annulla</button>
+      <button class="btn btn-secondary" id="btn-anteprima-rate" onclick="anteprimaRate()">👁 Anteprima rate</button>
+      <button class="btn btn-primary" id="btn-genera-rate" onclick="salvaIscrizioneTariffa()" disabled>💾 Salva e genera rate</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REGISTRA PAGAMENTO -->
+<div class="modal-overlay" id="modal-pagamento">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">Registra pagamento</div>
+      <button class="modal-close" onclick="chiudiModalPagamento()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg3);border-radius:var(--radius);padding:12px 14px;margin-bottom:20px;font-size:13px;">
+        <strong>Atleta:</strong> <span id="pag-atleta-nome">—</span><br>
+        <strong>Tipo:</strong> <span id="pag-tipo-label">—</span><br>
+        <strong>Importo:</strong> <span id="pag-importo-label" style="font-family:var(--mono);font-weight:600;color:var(--accent)">—</span><br>
+        <strong>Scadenza:</strong> <span id="pag-scadenza-label">—</span>
+      </div>
+      <div class="field">
+        <label>Data pagamento *</label>
+        <input type="date" id="pag-data">
+      </div>
+      <div class="field">
+        <label>Metodo di pagamento *</label>
+        <select id="pag-metodo">
+          <option value="contanti">Contanti</option>
+          <option value="bonifico">Bonifico bancario</option>
+          <option value="pos">POS / Carta</option>
+          <option value="altro">Altro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Numero ricevuta</label>
+        <input type="text" id="pag-ricevuta" disabled style="background:var(--bg3);color:var(--text2);font-family:var(--mono);" placeholder="Generato automaticamente">
+      </div>
+      <div class="field">
+        <label>Note</label>
+        <textarea id="pag-note" placeholder="Eventuali note sul pagamento..." style="min-height:60px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalPagamento()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaPagamento()">💾 Conferma pagamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIGURAZIONE SOCIETA -->
+<div class="modal-overlay" id="modal-societa">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title">Configurazione società</div>
+      <button class="modal-close" onclick="chiudiModalSocieta()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field" style="grid-column:1/-1">
+          <label>Nome società *</label>
+          <input type="text" id="soc-nome" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Tipo</label>
+          <select id="soc-tipo">
+            <option value="asd">ASD — Associazione Sportiva Dilettantistica</option>
+            <option value="ssd">SSD — Società Sportiva Dilettantistica</option>
+            <option value="srl">S.r.l.</option>
+            <option value="altro">Altro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Codice Fiscale</label>
+          <input type="text" id="soc-cf" style="text-transform:uppercase" maxlength="16">
+        </div>
+        <div class="field">
+          <label>Partita IVA</label>
+          <input type="text" id="soc-piva" maxlength="11">
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:14px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Sede legale</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field" style="grid-column:1/-1">
+          <label>Indirizzo</label>
+          <input type="text" id="soc-indirizzo" style="text-transform:uppercase" placeholder="VIA ROMA, 1">
+        </div>
+        <div class="field">
+          <label>Comune</label>
+          <input type="text" id="soc-comune" style="text-transform:uppercase" placeholder="MOLFETTA">
+        </div>
+        <div class="field">
+          <label>Provincia</label>
+          <input type="text" id="soc-provincia" maxlength="2" style="text-transform:uppercase" placeholder="BA">
+        </div>
+        <div class="field">
+          <label>CAP</label>
+          <input type="text" id="soc-cap" maxlength="5" placeholder="70056">
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:14px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Contatti</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <label>Telefono</label>
+          <input type="tel" id="soc-telefono" placeholder="080 1234567">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="soc-email" placeholder="info@societa.it">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>PEC</label>
+          <input type="email" id="soc-pec" placeholder="societa@pec.it">
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:14px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Logo società</div>
+      <div class="field">
+        <label>Logo attuale</label>
+        <div id="soc-logo-preview" style="margin-bottom:8px;"></div>
+        <input type="file" id="soc-logo-file" accept="image/png,image/jpeg,image/svg+xml" style="font-size:13px;">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Formati accettati: PNG, JPG, SVG. Dimensione consigliata: 300x100px.</div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:14px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Ricevute fiscali</div>
+      <div class="field">
+        <label>Testo documento ricevuta</label>
+        <input type="text" id="soc-testo-ricevuta" placeholder="Es. Ricevuta di pagamento quota sportiva">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Questo testo appare come titolo del documento. Consulta il tuo commercialista per il testo corretto in base alla forma giuridica.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalSocieta()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaSocieta()">💾 Salva configurazione</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GESTIONE DOCUMENTO -->
+<div class="modal-overlay" id="modal-documento">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-doc-title">Carica documento</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="modal-doc-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="chiudiModalDocumento()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- SEZIONE 1: DOCUMENTO IDENTITA -->
+      <div id="doc-sezione-identita">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;">📋 Documento di identità</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="field">
+            <label>Tipo documento</label>
+            <select id="doc-tipo-id">
+              <option value="carta_identita">Carta d'identità</option>
+              <option value="passaporto">Passaporto</option>
+              <option value="patente">Patente di guida</option>
+              <option value="altro">Altro</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Numero documento</label>
+            <input type="text" id="doc-numero" placeholder="ES. CA00000AA" style="text-transform:uppercase">
+          </div>
+          <div class="field">
+            <label>Data scadenza</label>
+            <input type="date" id="doc-scadenza-id">
+          </div>
+          <div class="field">
+            <label>File (PDF, JPG, PNG)</label>
+            <input type="file" id="doc-file-id" accept=".pdf,.jpg,.jpeg,.png" style="font-size:12px;">
+          </div>
+        </div>
+        <div id="doc-id-attuale" style="display:none;background:var(--bg3);border-radius:var(--radius);padding:10px 14px;font-size:12px;margin-top:8px;">
+          <strong>Documento attuale:</strong> <span id="doc-id-attuale-info">—</span>
+          <div style="display:inline-flex;gap:6px;margin-left:8px;">
+            <button class="btn btn-sm btn-secondary" onclick="scaricaDocumento('identita')">⬇ Scarica</button>
+            <button class="btn btn-sm btn-danger" onclick="eliminaDocumento('identita')">🗑 Elimina</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:20px 0;"></div>
+
+      <!-- SEZIONE 2: ISTANZA VISITA MEDICA -->
+      <div id="doc-sezione-istanza">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;">📝 Istanza di visita medica</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="field">
+            <label>Data istanza</label>
+            <input type="date" id="doc-data-istanza">
+          </div>
+          <div class="field">
+            <label>File (PDF, JPG, PNG)</label>
+            <input type="file" id="doc-file-istanza" accept=".pdf,.jpg,.jpeg,.png" style="font-size:12px;">
+          </div>
+        </div>
+        <div id="doc-istanza-attuale" style="display:none;background:var(--bg3);border-radius:var(--radius);padding:10px 14px;font-size:12px;margin-top:8px;">
+          <strong>Istanza attuale:</strong> <span id="doc-istanza-attuale-info">—</span>
+          <div style="display:inline-flex;gap:6px;margin-left:8px;">
+            <button class="btn btn-sm btn-secondary" onclick="scaricaDocumento('istanza')">⬇ Scarica</button>
+            <button class="btn btn-sm btn-danger" onclick="eliminaDocumento('istanza')">🗑 Elimina</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:20px 0;"></div>
+
+      <!-- SEZIONE 3: CERTIFICATO MEDICO -->
+      <div id="doc-sezione-certificato">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;">🏥 Certificato medico</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="field">
+            <label>Data scadenza *</label>
+            <input type="date" id="doc-scadenza-cert">
+          </div>
+          <div class="field">
+            <label>File (PDF, JPG, PNG)</label>
+            <input type="file" id="doc-file-cert" accept=".pdf,.jpg,.jpeg,.png" style="font-size:12px;">
+          </div>
+        </div>
+        <div id="doc-cert-attuale" style="display:none;background:var(--bg3);border-radius:var(--radius);padding:10px 14px;font-size:12px;margin-top:8px;">
+          <strong>Certificato attuale:</strong> <span id="doc-cert-attuale-info">—</span>
+          <div style="display:inline-flex;gap:6px;margin-left:8px;">
+            <button class="btn btn-sm btn-secondary" onclick="scaricaDocumento('certificato')">⬇ Scarica</button>
+            <button class="btn btn-sm btn-danger" onclick="eliminaDocumento('certificato')">🗑 Elimina</button>
+          </div>
+        </div>
+        <div id="doc-cert-alert" style="display:none;border-radius:var(--radius);padding:10px 14px;font-size:12px;margin-top:8px;"></div>
+      </div>
+
+      <div class="field" style="margin-top:16px;">
+        <label>Note</label>
+        <textarea id="doc-note" placeholder="Eventuali note sui documenti..." style="min-height:60px;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalDocumento()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaDocumenti()">💾 Salva documenti</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCHEDA ATLETA -->
+<div class="scheda-overlay" id="scheda-atleta">
+  <div class="scheda-box">
+    <div class="scheda-header">
+      <div style="position:relative;flex-shrink:0;">
+        <div class="scheda-avatar" id="sa-avatar" style="cursor:pointer;overflow:hidden;" onclick="document.getElementById('foto-input').click()" title="Clicca per cambiare foto">?</div>
+        <div style="position:absolute;bottom:0;right:0;background:var(--accent);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;" onclick="document.getElementById('foto-input').click()">✏️</div>
+        <div id="btn-elimina-foto" style="display:none;position:absolute;top:0;right:-4px;background:var(--danger);border-radius:50%;width:18px;height:18px;display:none;align-items:center;justify-content:center;font-size:10px;cursor:pointer;" onclick="eliminaFotoAtleta()" title="Elimina foto">✕</div>
+        <input type="file" id="foto-input" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="uploadFotoAtleta(this)">
+      </div>
+      <div class="scheda-info">
+        <div class="scheda-nome" id="sa-nome">—</div>
+        <div class="scheda-badges" id="sa-badges"></div>
+      </div>
+      <button class="scheda-close" onclick="chiudiSchedaAtleta()">✕</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('anagrafica')">👤 Anagrafica</button>
+      <button class="tab-btn" onclick="switchTab('documenti')">📄 Documenti</button>
+      <button class="tab-btn" onclick="switchTab('pagamenti')">💳 Pagamenti</button>
+      <button class="tab-btn" onclick="switchTab('note')">📝 Note</button>
+    </div>
+    <div class="tab-content">
+
+      <!-- TAB ANAGRAFICA -->
+      <div class="tab-panel active" id="tab-anagrafica">
+        <div class="info-grid" id="sa-dati-personali"></div>
+        <div id="sa-sezione-genitori"></div>
+      </div>
+
+      <!-- TAB DOCUMENTI -->
+      <div class="tab-panel" id="tab-documenti">
+        <div id="sa-documenti-list"></div>
+        <button class="btn btn-primary" style="margin-top:8px" id="sa-btn-carica-doc">+ Carica / aggiorna documenti</button>
+      </div>
+
+      <!-- TAB PAGAMENTI -->
+      <div class="tab-panel" id="tab-pagamenti">
+        <div id="sa-pagamenti-list"></div>
+      </div>
+
+      <!-- TAB NOTE -->
+      <div class="tab-panel" id="tab-note">
+        <div class="field">
+          <label>Note sull'atleta</label>
+          <textarea id="sa-note" style="min-height:120px;"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="salvaNotaAtleta()">💾 Salva nota</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
