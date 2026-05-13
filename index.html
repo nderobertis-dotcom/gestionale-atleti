@@ -3913,11 +3913,8 @@ function chiudiModalModificaUtente() {
 async function eliminaUtente(id) {
   if (!confirm('Eliminare questo utente? Operazione non reversibile.')) return;
   try {
-    // Elimina segreteria_societa
-    await sb.from('segreteria_societa').delete().eq('profilo_id', id);
-    // Elimina profilo
-    await sb.from('profilo').delete().eq('id', id);
-    // Nota: auth.users non può essere eliminato lato client - disattiviamo solo il profilo
+    const { error } = await sb.rpc('elimina_utente', { p_user_id: id });
+    if (error) throw new Error(error.message);
     toast('Utente eliminato', 'success');
     loadUtenti();
   } catch(e) {
