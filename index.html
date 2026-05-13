@@ -1523,20 +1523,26 @@ async function loadTariffe() {
 // UTENTI
 // ============================================================
 async function loadUtenti() {
-  const { data } = await sb.from('profilo').select('id, nome, cognome, email, ruolo, attivo').order('cognome');
+  const { data } = await sb.from('profilo')
+    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa(nome))')
+    .order('cognome');
   const tbody = document.getElementById('tbody-utenti');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🔐</div><p>Nessun utente trovato</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = data.map(u => `<tr>
-    <td><strong>${u.cognome} ${u.nome}</strong></td>
-    <td>${u.email}</td>
-    <td><span class="badge badge-gray">${u.ruolo}</span></td>
-    <td>—</td>
-    <td>${u.attivo ? '<span class="badge badge-green">Attivo</span>' : '<span class="badge badge-red">Disattivo</span>'}</td>
-    <td><button class="btn btn-sm btn-secondary">Modifica</button></td>
-  </tr>`).join('');
+  const ruoliLabel = { amministratore: '🔑 Admin', segreteria: '📋 Segreteria', allenatore: '🏃 Allenatore', genitore: '👨‍👩‍👧 Genitore' };
+  tbody.innerHTML = data.map(u => {
+    const societa = u.segreteria_societa?.[0]?.societa?.nome || '—';
+    return '<tr>' +
+      '<td><strong>' + (u.cognome || '') + ' ' + (u.nome || '') + '</strong></td>' +
+      '<td style="color:var(--text2)">' + (u.email || '') + '</td>' +
+      '<td><span class="badge badge-gray">' + (ruoliLabel[u.ruolo] || u.ruolo) + '</span></td>' +
+      '<td>' + societa + '</td>' +
+      '<td>' + (u.attivo ? '<span class="badge badge-green">Attivo</span>' : '<span class="badge badge-red">Disattivo</span>') + '</td>' +
+      '<td><button class="btn btn-sm btn-secondary" data-uid="' + u.id + '" onclick="apriModalModificaUtente(this.dataset.uid)">Modifica</button></td>' +
+      '</tr>';
+  }).join('');
 }
 
 // ============================================================
@@ -2927,6 +2933,117 @@ function generaHtmlRicevuta(d) {
 
 ${disclaimerAsd}
 
+<!-- MODAL NUOVO/MODIFICA UTENTE -->
+<div class="modal-overlay" id="modal-utente">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-utente-title">Nuovo utente</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="modal-utente-sub">Crea un account e assegna il ruolo</div>
+      </div>
+      <button class="modal-close" onclick="chiudiModalUtente()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div id="utente-form-nuovo">
+        <div class="field">
+          <label>Nome *</label>
+          <input type="text" id="u-nome" placeholder="MARIO" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Cognome *</label>
+          <input type="text" id="u-cognome" placeholder="ROSSI" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Email *</label>
+          <input type="email" id="u-email" placeholder="mario@esempio.it">
+        </div>
+        <div class="field">
+          <label>Password temporanea *</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="u-password" placeholder="Password da comunicare all'utente" style="flex:1">
+            <button class="btn btn-secondary" onclick="generaPassword()" type="button">🔀 Genera</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Comunica questa password all'utente via WhatsApp o email. L'utente potrà cambiarla dal suo profilo.</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Ruolo *</label>
+        <select id="u-ruolo" onchange="aggiornaFormUtente()">
+          <option value="segreteria">Segreteria</option>
+          <option value="allenatore">Allenatore</option>
+          <option value="amministratore">Amministratore</option>
+        </select>
+      </div>
+
+      <div id="u-societa-field" class="field">
+        <label>Società *</label>
+        <select id="u-societa">
+          <option value="">— Seleziona società —</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="u-societa-note">La segreteria vedrà solo i dati di questa società.</div>
+      </div>
+
+      <div id="u-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:14px;font-size:13px;margin-top:8px;">
+        <strong>Credenziali da comunicare:</strong><br>
+        <div style="margin-top:8px;font-family:var(--mono);background:var(--bg3);padding:10px;border-radius:6px;font-size:12px;">
+          Email: <span id="riep-email">—</span><br>
+          Password: <span id="riep-password">—</span><br>
+          URL: <a href="https://app.tesserato.club" target="_blank">https://app.tesserato.club</a>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copiaCredenziali()">📋 Copia credenziali</button>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalUtente()">Annulla</button>
+      <button class="btn btn-primary" id="btn-salva-utente" onclick="salvaUtente()">💾 Crea utente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MODIFICA UTENTE -->
+<div class="modal-overlay" id="modal-modifica-utente">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Modifica utente</div>
+      <button class="modal-close" onclick="chiudiModalModificaUtente()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg3);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:13px;">
+        <strong id="mu-nome-cognome">—</strong><br>
+        <span style="color:var(--text3)" id="mu-email">—</span>
+      </div>
+      <div class="field">
+        <label>Ruolo</label>
+        <select id="mu-ruolo" onchange="aggiornaFormModifica()">
+          <option value="segreteria">Segreteria</option>
+          <option value="allenatore">Allenatore</option>
+          <option value="amministratore">Amministratore</option>
+        </select>
+      </div>
+      <div id="mu-societa-field" class="field">
+        <label>Società</label>
+        <select id="mu-societa">
+          <option value="">— Seleziona società —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Stato account</label>
+        <select id="mu-attivo">
+          <option value="true">Attivo</option>
+          <option value="false">Disattivato</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalModificaUtente()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaModificaUtente()">💾 Salva modifiche</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`
 }
@@ -3637,6 +3754,212 @@ async function salvaNotaAtleta() {
   toast('Nota salvata', 'success');
 }
 
+
+// ============================================================
+// GESTIONE UTENTI
+// ============================================================
+let editUtenteId = null;
+
+function generaPassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  let pwd = '';
+  for (let i = 0; i < 10; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  document.getElementById('u-password').value = pwd;
+}
+
+function aggiornaFormUtente() {
+  const ruolo = document.getElementById('u-ruolo').value;
+  const socField = document.getElementById('u-societa-field');
+  const note = document.getElementById('u-societa-note');
+  if (ruolo === 'amministratore') {
+    socField.style.display = 'none';
+  } else {
+    socField.style.display = 'block';
+    note.textContent = ruolo === 'segreteria'
+      ? 'La segreteria vedrà solo i dati di questa società.'
+      : 'L allenatore potra essere assegnato a gruppi specifici dopo la creazione.';
+  }
+}
+
+function aggiornaFormModifica() {
+  const ruolo = document.getElementById('mu-ruolo').value;
+  document.getElementById('mu-societa-field').style.display = ruolo === 'amministratore' ? 'none' : 'block';
+}
+
+async function apriModalNuovoUtente() {
+  editUtenteId = null;
+  document.getElementById('modal-utente-title').textContent = 'Nuovo utente';
+  document.getElementById('u-nome').value = '';
+  document.getElementById('u-cognome').value = '';
+  document.getElementById('u-email').value = '';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-ruolo').value = 'segreteria';
+  document.getElementById('u-riepilogo').style.display = 'none';
+  document.getElementById('utente-form-nuovo').style.display = 'block';
+  document.getElementById('btn-salva-utente').textContent = '💾 Crea utente';
+  document.getElementById('btn-salva-utente').disabled = false;
+
+  // Popola società
+  const sel = document.getElementById('u-societa');
+  sel.innerHTML = '<option value="">— Seleziona società —</option>';
+  const { data } = await sb.from('societa').select('id, nome').order('nome');
+  if (data) data.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.nome;
+    sel.appendChild(o);
+  });
+
+  aggiornaFormUtente();
+  document.getElementById('modal-utente').classList.add('open');
+}
+
+function chiudiModalUtente() {
+  document.getElementById('modal-utente').classList.remove('open');
+}
+
+function copiaCredenziali() {
+  const email = document.getElementById('riep-email').textContent;
+  const pwd = document.getElementById('riep-password').textContent;
+  const testo = 'Credenziali Tesserato.club' + String.fromCharCode(10) + 'Email: ' + email + String.fromCharCode(10) + 'Password: ' + pwd + String.fromCharCode(10) + 'URL: https://app.tesserato.club';
+  navigator.clipboard.writeText(testo).then(() => toast('Credenziali copiate negli appunti!', 'success'));
+}
+
+async function salvaUtente() {
+  const nome = document.getElementById('u-nome').value.trim().toUpperCase();
+  const cognome = document.getElementById('u-cognome').value.trim().toUpperCase();
+  const email = document.getElementById('u-email').value.trim().toLowerCase();
+  const password = document.getElementById('u-password').value.trim();
+  const ruolo = document.getElementById('u-ruolo').value;
+  const societaId = document.getElementById('u-societa').value;
+
+  if (!nome) { toast('Inserisci il nome', 'error'); return; }
+  if (!cognome) { toast('Inserisci il cognome', 'error'); return; }
+  if (!email) { toast('Inserisci l email', 'error'); return; }
+  if (!password || password.length < 8) { toast('Password minimo 8 caratteri', 'error'); return; }
+  if (ruolo !== 'amministratore' && !societaId) { toast('Seleziona una società', 'error'); return; }
+
+  const btn = document.getElementById('btn-salva-utente');
+  btn.disabled = true;
+  btn.textContent = 'Creazione...';
+
+  try {
+    // 1. Crea utente su Supabase Auth tramite signUp
+    // Nota: usiamo una chiamata admin che richiede la service key
+    // Per ora usiamo l'approccio con invito via email di Supabase
+    const { data: authData, error: authError } = await sb.auth.admin?.createUser({
+      email, password, email_confirm: true
+    });
+
+    // Se admin API non disponibile lato client, usiamo RPC
+    let userId;
+    if (authError || !authData) {
+      // Fallback: chiama una funzione RPC per creare l'utente
+      const { data: rpcData, error: rpcError } = await sb.rpc('crea_utente_auth', {
+        p_email: email,
+        p_password: password
+      });
+      if (rpcError) throw new Error('Impossibile creare utente: ' + rpcError.message);
+      userId = rpcData;
+    } else {
+      userId = authData.user?.id;
+    }
+
+    if (!userId) throw new Error('ID utente non ricevuto');
+
+    // 2. Crea profilo
+    const { error: profError } = await sb.from('profilo').insert({
+      id: userId,
+      nome, cognome, email, ruolo, attivo: true
+    });
+    if (profError) throw new Error(profError.message);
+
+    // 3. Collega società se necessario
+    if (ruolo === 'segreteria' && societaId) {
+      await sb.from('segreteria_societa').insert({ profilo_id: userId, societa_id: societaId });
+    }
+
+    // Mostra riepilogo credenziali
+    document.getElementById('utente-form-nuovo').style.display = 'none';
+    document.getElementById('u-riepilogo').style.display = 'block';
+    document.getElementById('riep-email').textContent = email;
+    document.getElementById('riep-password').textContent = password;
+    btn.textContent = '✓ Utente creato';
+
+    toast('Utente creato con successo!', 'success');
+    loadUtenti();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '💾 Crea utente';
+  }
+}
+
+// MODIFICA UTENTE
+async function apriModalModificaUtente(id) {
+  editUtenteId = id;
+  const { data: u } = await sb.from('profilo').select('*').eq('id', id).single();
+  if (!u) { toast('Utente non trovato', 'error'); return; }
+
+  document.getElementById('mu-nome-cognome').textContent = u.cognome + ' ' + u.nome;
+  document.getElementById('mu-email').textContent = u.email;
+  document.getElementById('mu-ruolo').value = u.ruolo;
+  document.getElementById('mu-attivo').value = u.attivo ? 'true' : 'false';
+
+  // Popola società
+  const sel = document.getElementById('mu-societa');
+  sel.innerHTML = '<option value="">— Seleziona società —</option>';
+  const { data: societa } = await sb.from('societa').select('id, nome').order('nome');
+  if (societa) societa.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.nome;
+    sel.appendChild(o);
+  });
+
+  // Società attuale
+  const { data: ss } = await sb.from('segreteria_societa').select('societa_id').eq('profilo_id', id).single();
+  if (ss) sel.value = ss.societa_id;
+
+  aggiornaFormModifica();
+  document.getElementById('modal-modifica-utente').classList.add('open');
+}
+
+function chiudiModalModificaUtente() {
+  document.getElementById('modal-modifica-utente').classList.remove('open');
+}
+
+async function salvaModificaUtente() {
+  const ruolo = document.getElementById('mu-ruolo').value;
+  const societaId = document.getElementById('mu-societa').value;
+  const attivo = document.getElementById('mu-attivo').value === 'true';
+
+  const btn = document.querySelector('#modal-modifica-utente .btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    // Aggiorna profilo
+    const { error } = await sb.from('profilo').update({ ruolo, attivo }).eq('id', editUtenteId);
+    if (error) throw new Error(error.message);
+
+    // Aggiorna società segreteria
+    await sb.from('segreteria_societa').delete().eq('profilo_id', editUtenteId);
+    if (ruolo === 'segreteria' && societaId) {
+      await sb.from('segreteria_societa').insert({ profilo_id: editUtenteId, societa_id: societaId });
+    }
+
+    toast('Utente aggiornato!', 'success');
+    chiudiModalModificaUtente();
+    loadUtenti();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Salva modifiche';
+  }
+}
+
 // ============================================================
 // TEMA
 // ============================================================
@@ -4315,6 +4638,117 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <button class="btn btn-primary" onclick="salvaNotaAtleta()">💾 Salva nota</button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUOVO/MODIFICA UTENTE -->
+<div class="modal-overlay" id="modal-utente">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-utente-title">Nuovo utente</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="modal-utente-sub">Crea un account e assegna il ruolo</div>
+      </div>
+      <button class="modal-close" onclick="chiudiModalUtente()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div id="utente-form-nuovo">
+        <div class="field">
+          <label>Nome *</label>
+          <input type="text" id="u-nome" placeholder="MARIO" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Cognome *</label>
+          <input type="text" id="u-cognome" placeholder="ROSSI" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Email *</label>
+          <input type="email" id="u-email" placeholder="mario@esempio.it">
+        </div>
+        <div class="field">
+          <label>Password temporanea *</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="u-password" placeholder="Password da comunicare all'utente" style="flex:1">
+            <button class="btn btn-secondary" onclick="generaPassword()" type="button">🔀 Genera</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Comunica questa password all'utente via WhatsApp o email. L'utente potrà cambiarla dal suo profilo.</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Ruolo *</label>
+        <select id="u-ruolo" onchange="aggiornaFormUtente()">
+          <option value="segreteria">Segreteria</option>
+          <option value="allenatore">Allenatore</option>
+          <option value="amministratore">Amministratore</option>
+        </select>
+      </div>
+
+      <div id="u-societa-field" class="field">
+        <label>Società *</label>
+        <select id="u-societa">
+          <option value="">— Seleziona società —</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="u-societa-note">La segreteria vedrà solo i dati di questa società.</div>
+      </div>
+
+      <div id="u-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:14px;font-size:13px;margin-top:8px;">
+        <strong>Credenziali da comunicare:</strong><br>
+        <div style="margin-top:8px;font-family:var(--mono);background:var(--bg3);padding:10px;border-radius:6px;font-size:12px;">
+          Email: <span id="riep-email">—</span><br>
+          Password: <span id="riep-password">—</span><br>
+          URL: <a href="https://app.tesserato.club" target="_blank">https://app.tesserato.club</a>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copiaCredenziali()">📋 Copia credenziali</button>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalUtente()">Annulla</button>
+      <button class="btn btn-primary" id="btn-salva-utente" onclick="salvaUtente()">💾 Crea utente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MODIFICA UTENTE -->
+<div class="modal-overlay" id="modal-modifica-utente">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Modifica utente</div>
+      <button class="modal-close" onclick="chiudiModalModificaUtente()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg3);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:13px;">
+        <strong id="mu-nome-cognome">—</strong><br>
+        <span style="color:var(--text3)" id="mu-email">—</span>
+      </div>
+      <div class="field">
+        <label>Ruolo</label>
+        <select id="mu-ruolo" onchange="aggiornaFormModifica()">
+          <option value="segreteria">Segreteria</option>
+          <option value="allenatore">Allenatore</option>
+          <option value="amministratore">Amministratore</option>
+        </select>
+      </div>
+      <div id="mu-societa-field" class="field">
+        <label>Società</label>
+        <select id="mu-societa">
+          <option value="">— Seleziona società —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Stato account</label>
+        <select id="mu-attivo">
+          <option value="true">Attivo</option>
+          <option value="false">Disattivato</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalModificaUtente()">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaModificaUtente()">💾 Salva modifiche</button>
     </div>
   </div>
 </div>
