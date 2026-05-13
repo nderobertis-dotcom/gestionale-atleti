@@ -1524,23 +1524,27 @@ async function loadTariffe() {
 // ============================================================
 async function loadUtenti() {
   const { data } = await sb.from('profilo')
-    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa(nome))')
+    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome))')
     .order('cognome');
   const tbody = document.getElementById('tbody-utenti');
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🔐</div><p>Nessun utente trovato</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🔐</div><p>Nessun utente trovato</p></div></td></tr>';
     return;
   }
   const ruoliLabel = { amministratore: '🔑 Admin', segreteria: '📋 Segreteria', allenatore: '🏃 Allenatore', genitore: '👨‍👩‍👧 Genitore' };
   tbody.innerHTML = data.map(u => {
     const societa = u.segreteria_societa?.[0]?.societa?.nome || '—';
+    const isMe = u.id === currentUser?.id;
     return '<tr>' +
       '<td><strong>' + (u.cognome || '') + ' ' + (u.nome || '') + '</strong></td>' +
-      '<td style="color:var(--text2)">' + (u.email || '') + '</td>' +
+      '<td style="color:var(--text2);font-size:12px">' + (u.email || '') + '</td>' +
       '<td><span class="badge badge-gray">' + (ruoliLabel[u.ruolo] || u.ruolo) + '</span></td>' +
-      '<td>' + societa + '</td>' +
+      '<td>' + (societa !== '—' ? '<span class="badge badge-gray">' + societa + '</span>' : '<span style="color:var(--text3)">—</span>') + '</td>' +
       '<td>' + (u.attivo ? '<span class="badge badge-green">Attivo</span>' : '<span class="badge badge-red">Disattivo</span>') + '</td>' +
-      '<td><button class="btn btn-sm btn-secondary" data-uid="' + u.id + '" onclick="apriModalModificaUtente(this.dataset.uid)">Modifica</button></td>' +
+      '<td style="display:flex;gap:6px">' +
+        '<button class="btn btn-sm btn-secondary" data-uid="' + u.id + '" onclick="apriModalModificaUtente(this.dataset.uid)">Modifica</button>' +
+        (!isMe ? '<button class="btn btn-sm btn-danger" data-uid="' + u.id + '" onclick="eliminaUtente(this.dataset.uid)">🗑</button>' : '') +
+      '</td>' +
       '</tr>';
   }).join('');
 }
@@ -3894,9 +3898,9 @@ async function apriModalModificaUtente(id) {
     sel.appendChild(o);
   });
 
-  // Società attuale
-  const { data: ss } = await sb.from('segreteria_societa').select('societa_id').eq('profilo_id', id).single();
-  if (ss) sel.value = ss.societa_id;
+  // Società attuale - carica e pre-seleziona
+  const { data: ss } = await sb.from('segreteria_societa').select('societa_id').eq('profilo_id', id);
+  if (ss && ss.length > 0) sel.value = ss[0].societa_id;
 
   aggiornaFormModifica();
   document.getElementById('modal-modifica-utente').classList.add('open');
@@ -3904,6 +3908,21 @@ async function apriModalModificaUtente(id) {
 
 function chiudiModalModificaUtente() {
   document.getElementById('modal-modifica-utente').classList.remove('open');
+}
+
+async function eliminaUtente(id) {
+  if (!confirm('Eliminare questo utente? Operazione non reversibile.')) return;
+  try {
+    // Elimina segreteria_societa
+    await sb.from('segreteria_societa').delete().eq('profilo_id', id);
+    // Elimina profilo
+    await sb.from('profilo').delete().eq('id', id);
+    // Nota: auth.users non può essere eliminato lato client - disattiviamo solo il profilo
+    toast('Utente eliminato', 'success');
+    loadUtenti();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
 }
 
 async function salvaModificaUtente() {
