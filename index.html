@@ -1635,7 +1635,7 @@ document.getElementById('filter-doc-tipo').addEventListener('change', loadDocume
 
 // Bottoni nuovi record (placeholder)
 ['btn-nuovo-genitore','btn-nuovo-gruppo','btn-nuova-iscrizione',
- 'btn-nuovo-pagamento','btn-nuovo-documento','btn-nuova-tariffa','btn-nuovo-utente'].forEach(id => {
+ 'btn-nuovo-pagamento','btn-nuovo-documento','btn-nuova-tariffa'].forEach(id => {
   document.getElementById(id)?.addEventListener('click', () => toast('Funzione in sviluppo', 'warning'));
 });
 
@@ -3991,6 +3991,7 @@ initTema();
 
 // Collegamento bottone nuovo atleta
 document.getElementById('btn-nuovo-atleta')?.addEventListener('click', apriModalAtleta);
+document.getElementById('btn-nuovo-gruppo')?.addEventListener('click', apriModalGruppo);
 document.getElementById('btn-nuovo-utente')?.addEventListener('click', apriModalNuovoUtente);
 document.getElementById('btn-nuovo-documento')?.addEventListener('click', () => {
   toast('Seleziona un atleta dalla lista Atleti per caricare documenti', 'warning');
