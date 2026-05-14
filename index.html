@@ -3867,7 +3867,17 @@ async function salvaUtente() {
     document.getElementById('riep-password').textContent = password;
     btn.textContent = '✓ Utente creato';
 
-    toast('Utente creato con successo!', 'success');
+    // Copia automatica negli appunti
+    const testoCredenziali = 'Credenziali Tesserato.club' + String.fromCharCode(10) +
+      'Email: ' + email + String.fromCharCode(10) +
+      'Password: ' + password + String.fromCharCode(10) +
+      'URL: https://app.tesserato.club';
+    try {
+      await navigator.clipboard.writeText(testoCredenziali);
+      toast('Utente creato! Credenziali copiate negli appunti automaticamente.', 'success');
+    } catch(e) {
+      toast('Utente creato con successo!', 'success');
+    }
     loadUtenti();
 
   } catch(e) {
@@ -3908,6 +3918,47 @@ async function apriModalModificaUtente(id) {
 
 function chiudiModalModificaUtente() {
   document.getElementById('modal-modifica-utente').classList.remove('open');
+}
+
+function generaPasswordModifica() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  let pwd = '';
+  for (let i = 0; i < 10; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  document.getElementById('mu-nuova-password').value = pwd;
+}
+
+async function reimpostaPassword() {
+  const nuovaPwd = document.getElementById('mu-nuova-password').value.trim();
+  if (!nuovaPwd || nuovaPwd.length < 8) { toast('Password minimo 8 caratteri', 'error'); return; }
+  if (!editUtenteId) return;
+
+  try {
+    const { error } = await sb.rpc('reimposta_password_utente', {
+      p_user_id: editUtenteId,
+      p_password: nuovaPwd
+    });
+    if (error) throw new Error(error.message);
+
+    // Mostra e copia
+    document.getElementById('mu-pwd-riepilogo').style.display = 'block';
+    document.getElementById('mu-pwd-mostrata').textContent = nuovaPwd;
+
+    // Copia automatica
+    try {
+      await navigator.clipboard.writeText('Nuova password: ' + nuovaPwd + String.fromCharCode(10) + 'URL: https://app.tesserato.club');
+      toast('Password reimpostata e copiata negli appunti!', 'success');
+    } catch(e) {
+      toast('Password reimpostata con successo!', 'success');
+    }
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function copiaNuovaPassword() {
+  const pwd = document.getElementById('mu-pwd-mostrata').textContent;
+  await navigator.clipboard.writeText(pwd);
+  toast('Password copiata!', 'success');
 }
 
 async function eliminaUtente(id) {
