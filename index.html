@@ -1019,6 +1019,7 @@ tbody tr:last-child { border-bottom: none; }
         <div class="page-sub">Gestione accessi al sistema</div>
         <div class="toolbar">
           <button class="btn btn-primary" id="btn-nuovo-utente">+ Invita utente</button>
+          <button class="btn btn-secondary" id="btn-nuova-segreteria" style="margin-left:8px">+ Aggiungi segreteria</button>
         </div>
         <div class="card">
           <div class="table-wrap">
@@ -3059,6 +3060,56 @@ ${disclaimerAsd}
   </div>
 </div>
 
+<!-- MODAL AGGIUNGI SEGRETERIA -->
+<div class="modal-overlay" id="modal-segreteria">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">Aggiungi segreteria</div>
+      <button class="modal-close" onclick="chiudiModal('modal-segreteria')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
+        Aggiungi un utente segreteria a una società già esistente nel sistema.
+      </div>
+      <div class="field">
+        <label>Società *</label>
+        <select id="seg-societa-id"></select>
+      </div>
+      <div class="field">
+        <label>Nome *</label>
+        <input type="text" id="seg-nome" style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>Cognome *</label>
+        <input type="text" id="seg-cognome" style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>Email *</label>
+        <input type="email" id="seg-email">
+      </div>
+      <div class="field">
+        <label>Password temporanea *</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="seg-password" style="flex:1;font-family:var(--mono)">
+          <button class="btn btn-secondary" onclick="generaPasswordSeg()" type="button">🔀</button>
+        </div>
+      </div>
+      <div id="seg-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px;font-size:12px;margin-top:8px;">
+        <strong>Profilo creato!</strong> Ora vai su Supabase → Authentication → Users → Add user e crea l account con:<br>
+        <div style="font-family:var(--mono);margin-top:6px;background:var(--bg3);padding:8px;border-radius:4px;">
+          Email: <span id="seg-riep-email">—</span><br>
+          Password: <span id="seg-riep-pwd">—</span>
+        </div>
+        <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="copiaCredSeg()">📋 Copia</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-segreteria')">Chiudi</button>
+      <button class="btn btn-primary" id="btn-salva-seg" onclick="salvaSegreteria()">💾 Crea segreteria</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`}
 
@@ -3989,6 +4040,88 @@ async function salvaModificaUtente() {
 
 
 
+
+// AGGIUNGI SEGRETERIA A SOCIETA ESISTENTE
+function generaPasswordSeg() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  let pwd = '';
+  for (let i = 0; i < 10; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  document.getElementById('seg-password').value = pwd;
+}
+
+async function apriModalSegreteria() {
+  document.getElementById('seg-nome').value = '';
+  document.getElementById('seg-cognome').value = '';
+  document.getElementById('seg-email').value = '';
+  document.getElementById('seg-riepilogo').style.display = 'none';
+  document.getElementById('btn-salva-seg').disabled = false;
+  document.getElementById('btn-salva-seg').textContent = 'Crea segreteria';
+
+  const sel = document.getElementById('seg-societa-id');
+  sel.innerHTML = '<option value="">— Seleziona —</option>';
+  const { data } = await sb.from('societa').select('id, nome').order('nome');
+  if (data) data.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.nome;
+    sel.appendChild(o);
+  });
+
+  generaPasswordSeg();
+  apriModal('modal-segreteria');
+}
+
+async function salvaSegreteria() {
+  const societaId = document.getElementById('seg-societa-id').value;
+  const nome = document.getElementById('seg-nome').value.trim().toUpperCase();
+  const cognome = document.getElementById('seg-cognome').value.trim().toUpperCase();
+  const email = document.getElementById('seg-email').value.trim().toLowerCase();
+  const password = document.getElementById('seg-password').value.trim();
+
+  if (!societaId) { toast('Seleziona una societa', 'error'); return; }
+  if (!nome) { toast('Inserisci il nome', 'error'); return; }
+  if (!cognome) { toast('Inserisci il cognome', 'error'); return; }
+  if (!email) { toast('Inserisci l email', 'error'); return; }
+  if (!password || password.length < 8) { toast('Password minimo 8 caratteri', 'error'); return; }
+
+  const btn = document.getElementById('btn-salva-seg');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    const profiloId = crypto.randomUUID();
+    const { error: profErr } = await sb.from('profilo').insert({
+      id: profiloId, nome, cognome, email, ruolo: 'segreteria', attivo: true
+    });
+    if (profErr) throw new Error(profErr.message);
+
+    await sb.from('segreteria_societa').insert({ profilo_id: profiloId, societa_id: societaId });
+
+    document.getElementById('seg-riep-email').textContent = email;
+    document.getElementById('seg-riep-pwd').textContent = password;
+    document.getElementById('seg-riepilogo').style.display = 'block';
+    btn.textContent = '✓ Creato';
+
+    try {
+      await navigator.clipboard.writeText('Email: ' + email + String.fromCharCode(10) + 'Password: ' + password + String.fromCharCode(10) + 'URL: https://app.tesserato.club');
+      toast('Profilo creato! Credenziali copiate negli appunti.', 'success');
+    } catch(e) {
+      toast('Profilo creato con successo!', 'success');
+    }
+    loadUtenti();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Crea segreteria';
+  }
+}
+
+function copiaCredSeg() {
+  const email = document.getElementById('seg-riep-email').textContent;
+  const pwd = document.getElementById('seg-riep-pwd').textContent;
+  navigator.clipboard.writeText('Email: ' + email + String.fromCharCode(10) + 'Password: ' + pwd + String.fromCharCode(10) + 'URL: https://app.tesserato.club')
+    .then(() => toast('Copiato!', 'success'));
+}
+
 // ONBOARDING
 let onbData = {};
 function initOnboarding() {
@@ -4172,6 +4305,7 @@ initTema();
 document.getElementById('btn-nuovo-atleta')?.addEventListener('click', apriModalAtleta);
 document.getElementById('btn-nuovo-gruppo')?.addEventListener('click', apriModalGruppo);
 document.getElementById('btn-nuovo-utente')?.addEventListener('click', apriModalNuovoUtente);
+  document.getElementById('btn-nuova-segreteria')?.addEventListener('click', apriModalSegreteria);
 document.getElementById('btn-nuovo-documento')?.addEventListener('click', () => {
   toast('Seleziona un atleta dalla lista Atleti per caricare documenti', 'warning');
 });
@@ -4965,6 +5099,56 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-reset-pwd')">Chiudi</button>
       <button class="btn btn-primary" id="btn-salva-pwd" onclick="salvaResetPwd()">🔑 Reimposta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AGGIUNGI SEGRETERIA -->
+<div class="modal-overlay" id="modal-segreteria">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">Aggiungi segreteria</div>
+      <button class="modal-close" onclick="chiudiModal('modal-segreteria')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
+        Aggiungi un utente segreteria a una società già esistente nel sistema.
+      </div>
+      <div class="field">
+        <label>Società *</label>
+        <select id="seg-societa-id"></select>
+      </div>
+      <div class="field">
+        <label>Nome *</label>
+        <input type="text" id="seg-nome" style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>Cognome *</label>
+        <input type="text" id="seg-cognome" style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>Email *</label>
+        <input type="email" id="seg-email">
+      </div>
+      <div class="field">
+        <label>Password temporanea *</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="seg-password" style="flex:1;font-family:var(--mono)">
+          <button class="btn btn-secondary" onclick="generaPasswordSeg()" type="button">🔀</button>
+        </div>
+      </div>
+      <div id="seg-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px;font-size:12px;margin-top:8px;">
+        <strong>Profilo creato!</strong> Ora vai su Supabase → Authentication → Users → Add user e crea l account con:<br>
+        <div style="font-family:var(--mono);margin-top:6px;background:var(--bg3);padding:8px;border-radius:4px;">
+          Email: <span id="seg-riep-email">—</span><br>
+          Password: <span id="seg-riep-pwd">—</span>
+        </div>
+        <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="copiaCredSeg()">📋 Copia</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-segreteria')">Chiudi</button>
+      <button class="btn btn-primary" id="btn-salva-seg" onclick="salvaSegreteria()">💾 Crea segreteria</button>
     </div>
   </div>
 </div>
