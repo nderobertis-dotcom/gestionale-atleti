@@ -592,6 +592,14 @@ tbody tr:last-child { border-bottom: none; }
 .doc-dettaglio { font-size: 13px; margin-top: 2px; }
 .doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
+
+.onb-step { display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0; }
+.onb-step-num { width:36px;height:36px;border-radius:50%;background:var(--bg3);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--text3);transition:all 0.3s; }
+.onb-step.active .onb-step-num { background:var(--accent);border-color:var(--accent);color:#fff; }
+.onb-step.done .onb-step-num { background:var(--success);border-color:var(--success);color:#fff; }
+.onb-step-label { font-size:11px;color:var(--text3);font-weight:500; }
+.onb-step.active .onb-step-label { color:var(--accent);font-weight:600; }
+.onb-step-line { flex:1;height:2px;background:var(--border);min-width:60px;margin-bottom:20px; }
 </style>
 </head>
 <body>
@@ -876,7 +884,80 @@ tbody tr:last-child { border-bottom: none; }
         </div>
       </div>
 
-      <!-- SOCIETA -->
+            <!-- ONBOARDING NUOVA SOCIETA -->
+      <div class="section" id="section-onboarding">
+        <div class="page-title">Nuova società</div>
+        <div class="page-sub">Procedura guidata per attivare una nuova società cliente</div>
+        <div style="display:flex;align-items:center;gap:0;margin-bottom:32px;margin-top:8px;">
+          <div class="onb-step active" id="onb-ind-1"><div class="onb-step-num">1</div><div class="onb-step-label">Dati società</div></div>
+          <div class="onb-step-line"></div>
+          <div class="onb-step" id="onb-ind-2"><div class="onb-step-num">2</div><div class="onb-step-label">Segreteria</div></div>
+          <div class="onb-step-line"></div>
+          <div class="onb-step" id="onb-ind-3"><div class="onb-step-num">3</div><div class="onb-step-label">Riepilogo</div></div>
+        </div>
+        <div class="card" id="onb-step-1">
+          <div style="font-size:13px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:20px;">Dati della società</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div class="field" style="grid-column:1/-1"><label>Nome società *</label><input type="text" id="onb-nome" style="text-transform:uppercase"></div>
+            <div class="field"><label>Tipo *</label><select id="onb-tipo"><option value="asd">ASD</option><option value="ssd">SSD</option><option value="srl">S.r.l.</option><option value="altro">Altro</option></select></div>
+            <div class="field"><label>Codice Fiscale</label><input type="text" id="onb-cf" maxlength="16" style="text-transform:uppercase"></div>
+            <div class="field"><label>Partita IVA</label><input type="text" id="onb-piva" maxlength="11"></div>
+            <div class="field" style="grid-column:1/-1"><label>Indirizzo</label><input type="text" id="onb-indirizzo" style="text-transform:uppercase"></div>
+            <div class="field"><label>Comune</label><input type="text" id="onb-comune" style="text-transform:uppercase"></div>
+            <div class="field"><label>Provincia</label><input type="text" id="onb-provincia" maxlength="2" style="text-transform:uppercase"></div>
+            <div class="field"><label>CAP</label><input type="text" id="onb-cap" maxlength="5"></div>
+            <div class="field"><label>Telefono</label><input type="tel" id="onb-telefono"></div>
+            <div class="field" style="grid-column:1/-1"><label>Email</label><input type="email" id="onb-email-soc"></div>
+            <div class="field" style="grid-column:1/-1"><label>PEC</label><input type="email" id="onb-pec"></div>
+            <div class="field" style="grid-column:1/-1"><label>Testo ricevuta</label><input type="text" id="onb-testo-ricevuta" value="Ricevuta di pagamento quota sportiva"></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+            <button class="btn btn-primary" onclick="onbStep1Next()">Avanti →</button>
+          </div>
+        </div>
+        <div class="card" id="onb-step-2" style="display:none;">
+          <div style="font-size:13px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:20px;">Utente segreteria</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div class="field"><label>Nome *</label><input type="text" id="onb-seg-nome" style="text-transform:uppercase"></div>
+            <div class="field"><label>Cognome *</label><input type="text" id="onb-seg-cognome" style="text-transform:uppercase"></div>
+            <div class="field" style="grid-column:1/-1"><label>Email *</label><input type="email" id="onb-seg-email"></div>
+            <div class="field" style="grid-column:1/-1">
+              <label>Password temporanea *</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="onb-seg-password" style="flex:1;font-family:var(--mono)">
+                <button class="btn btn-secondary" onclick="generaPasswordOnb()" type="button">Genera</button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:20px;">
+            <button class="btn btn-secondary" onclick="onbGoStep(1)">Indietro</button>
+            <button class="btn btn-primary" onclick="onbStep2Next()">Avanti →</button>
+          </div>
+        </div>
+        <div class="card" id="onb-step-3" style="display:none;">
+          <div style="font-size:13px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:20px;">Riepilogo e attivazione</div>
+          <div id="onb-riepilogo-box" style="background:var(--bg3);border-radius:var(--radius);padding:16px;margin-bottom:16px;font-size:13px;line-height:1.8;"></div>
+          <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.2);border-radius:var(--radius);padding:16px;margin-bottom:16px;font-size:13px;line-height:1.8;">
+            <strong>Passo obbligatorio dopo attivazione:</strong><br>
+            1. Vai su <a href="https://supabase.com/dashboard/project/dfppifjbohdslfqggkhi/auth/users" target="_blank" style="color:var(--accent)">Supabase → Authentication → Users</a><br>
+            2. Clicca <strong>Add user → Create new user</strong><br>
+            3. Inserisci email e password dal riepilogo<br>
+            4. Spunta <strong>Auto Confirm User</strong> e clicca Create user
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:16px;">
+            <button class="btn btn-secondary" style="flex:1" onclick="copiaRiepilogoOnb()">Copia credenziali</button>
+            <button class="btn btn-primary" style="flex:1" id="btn-onb-attiva" onclick="attivaOnboarding()">Attiva societa</button>
+          </div>
+          <div id="onb-success" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:16px;text-align:center;">
+            <div style="font-size:24px;margin-bottom:8px;">Societa attivata!</div>
+            <div style="font-size:13px;color:var(--text2);">Ora crea l account su Supabase e comunica le credenziali.</div>
+            <button class="btn btn-primary" style="margin-top:16px" onclick="onbReset()">+ Aggiungi altra societa</button>
+          </div>
+          <div style="margin-top:8px;"><button class="btn btn-secondary" onclick="onbGoStep(2)">Indietro</button></div>
+        </div>
+      </div>
+
+<!-- SOCIETA -->
       <div class="section" id="section-societa">
         <div class="page-title">Società</div>
         <div class="page-sub">Configurazione dati societari e fiscali</div>
@@ -1014,6 +1095,7 @@ const MENU = {
     { section: 'documenti', icon: '📄', label: 'Documenti' },
     { section: 'tariffe',   icon: '🏷️', label: 'Tariffe' },
     { section: 'societa',   icon: '🏢', label: 'Società' },
+    { section: 'onboarding',icon: '🚀', label: 'Nuova società' },
     { section: 'utenti',    icon: '🔐', label: 'Utenti' },
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
   ],
@@ -1145,6 +1227,7 @@ async function loadSection(section) {
     case 'utenti':     loadUtenti(); break;
     case 'profilo':    loadProfilo(); break;
     case 'societa':    loadSocietaList(); break;
+    case 'onboarding': initOnboarding(); break;
   }
 }
 
@@ -2885,6 +2968,14 @@ function generaHtmlRicevuta(d) {
 .doc-dettaglio { font-size: 13px; margin-top: 2px; }
 .doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
+
+.onb-step { display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0; }
+.onb-step-num { width:36px;height:36px;border-radius:50%;background:var(--bg3);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--text3);transition:all 0.3s; }
+.onb-step.active .onb-step-num { background:var(--accent);border-color:var(--accent);color:#fff; }
+.onb-step.done .onb-step-num { background:var(--success);border-color:var(--success);color:#fff; }
+.onb-step-label { font-size:11px;color:var(--text3);font-weight:500; }
+.onb-step.active .onb-step-label { color:var(--accent);font-weight:600; }
+.onb-step-line { flex:1;height:2px;background:var(--border);min-width:60px;margin-bottom:20px; }
 </style>
 </head>
 <body>
@@ -3896,6 +3987,80 @@ async function salvaModificaUtente() {
   }
 }
 
+
+
+// ONBOARDING
+let onbData = {};
+function initOnboarding() {
+  onbGoStep(1);
+  ['onb-nome','onb-cf','onb-piva','onb-indirizzo','onb-comune','onb-provincia','onb-cap','onb-telefono','onb-email-soc','onb-pec','onb-seg-nome','onb-seg-cognome','onb-seg-email','onb-seg-password'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('onb-tipo').value='asd';
+  document.getElementById('onb-testo-ricevuta').value='Ricevuta di pagamento quota sportiva';
+  document.getElementById('onb-success').style.display='none';
+  document.getElementById('btn-onb-attiva').style.display='inline-flex';
+  onbData={};
+}
+function onbGoStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById('onb-step-'+i).style.display = i===n?'block':'none';
+    const ind = document.getElementById('onb-ind-'+i);
+    ind.classList.remove('active','done');
+    if(i===n) ind.classList.add('active');
+    if(i<n) ind.classList.add('done');
+  });
+}
+function generaPasswordOnb() {
+  const chars='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  let pwd=''; for(let i=0;i<10;i++) pwd+=chars.charAt(Math.floor(Math.random()*chars.length));
+  document.getElementById('onb-seg-password').value=pwd;
+}
+function onbStep1Next() {
+  const nome=document.getElementById('onb-nome').value.trim().toUpperCase();
+  if(!nome){toast('Inserisci il nome della societa','error');return;}
+  onbData.societa={nome,tipo:document.getElementById('onb-tipo').value,codice_fiscale:document.getElementById('onb-cf').value.trim().toUpperCase()||null,partita_iva:document.getElementById('onb-piva').value.trim()||null,indirizzo:document.getElementById('onb-indirizzo').value.trim().toUpperCase()||null,comune:document.getElementById('onb-comune').value.trim().toUpperCase()||null,provincia:document.getElementById('onb-provincia').value.trim().toUpperCase()||null,cap:document.getElementById('onb-cap').value.trim()||null,telefono:document.getElementById('onb-telefono').value.trim()||null,email:document.getElementById('onb-email-soc').value.trim()||null,pec:document.getElementById('onb-pec').value.trim()||null,testo_ricevuta:document.getElementById('onb-testo-ricevuta').value.trim()||'Ricevuta di pagamento quota sportiva'};
+  onbGoStep(2); generaPasswordOnb();
+}
+function onbStep2Next() {
+  const nome=document.getElementById('onb-seg-nome').value.trim().toUpperCase();
+  const cognome=document.getElementById('onb-seg-cognome').value.trim().toUpperCase();
+  const email=document.getElementById('onb-seg-email').value.trim().toLowerCase();
+  const password=document.getElementById('onb-seg-password').value.trim();
+  if(!nome){toast('Inserisci il nome','error');return;}
+  if(!cognome){toast('Inserisci il cognome','error');return;}
+  if(!email){toast('Inserisci l email','error');return;}
+  if(!password||password.length<8){toast('Password minimo 8 caratteri','error');return;}
+  onbData.segreteria={nome,cognome,email,password};
+  const s=onbData.societa; const seg=onbData.segreteria;
+  document.getElementById('onb-riepilogo-box').innerHTML='<strong>Societa:</strong> '+s.nome+' ('+s.tipo.toUpperCase()+')<br>'+(s.codice_fiscale?'<strong>C.F.:</strong> '+s.codice_fiscale+'<br>':'')+(s.comune?'<strong>Sede:</strong> '+s.comune+'<br>':'')+'<br><strong>Segreteria:</strong> '+seg.cognome+' '+seg.nome+'<br><strong>Email:</strong> '+seg.email+'<br><strong>Password:</strong> <span style="font-family:var(--mono);background:var(--bg3);padding:2px 6px;border-radius:4px">'+seg.password+'</span><br><strong>URL:</strong> <a href="https://app.tesserato.club" target="_blank">https://app.tesserato.club</a>';
+  onbGoStep(3);
+}
+function copiaRiepilogoOnb() {
+  const s=onbData.societa; const seg=onbData.segreteria;
+  const t='NUOVA SOCIETA TESSERATO.CLUB'+String.fromCharCode(10)+'Societa: '+s.nome+String.fromCharCode(10)+'Segreteria: '+seg.cognome+' '+seg.nome+String.fromCharCode(10)+'Email: '+seg.email+String.fromCharCode(10)+'Password: '+seg.password+String.fromCharCode(10)+'URL: https://app.tesserato.club';
+  navigator.clipboard.writeText(t).then(()=>toast('Credenziali copiate!','success'));
+}
+async function attivaOnboarding() {
+  const btn=document.getElementById('btn-onb-attiva');
+  btn.disabled=true; btn.textContent='Attivazione...';
+  try {
+    const s=onbData.societa; const seg=onbData.segreteria;
+    const {data:socData,error:socErr}=await sb.from('societa').insert(s).select('id').single();
+    if(socErr) throw new Error('Errore societa: '+socErr.message);
+    const societaId=socData.id;
+    const profiloId=crypto.randomUUID();
+    const {error:profErr}=await sb.from('profilo').insert({id:profiloId,nome:seg.nome,cognome:seg.cognome,email:seg.email,ruolo:'segreteria',attivo:true});
+    if(profErr) throw new Error('Errore profilo: '+profErr.message);
+    await sb.from('segreteria_societa').insert({profilo_id:profiloId,societa_id:societaId});
+    document.getElementById('onb-success').style.display='block';
+    btn.style.display='none';
+    copiaRiepilogoOnb();
+    toast('Societa attivata! Credenziali copiate.','success');
+  } catch(e) {
+    toast('Errore: '+e.message,'error');
+    btn.disabled=false; btn.textContent='Attiva societa';
+  }
+}
+function onbReset() { initOnboarding(); }
 
 // ============================================================
 // RESET PASSWORD UTENTE
