@@ -351,10 +351,6 @@ tbody tr:last-child { border-bottom: none; }
   display: none;
 }
 .modal-overlay.open { display: flex; }
-.modal-overlay.open .modal {
-  overflow-y: auto !important;
-  max-height: 88vh !important;
-}
 .modal {
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -1683,7 +1679,7 @@ async function apriModalAtleta() {
   resetFormAtleta();
   await popolaSocietaModal();
   maShowStep(1);
-  document.getElementById('modal-atleta').classList.add('open');
+  apriModal('modal-atleta');
 }
 
 function chiudiModalAtleta() {
@@ -2038,7 +2034,7 @@ async function apriModalGruppo() {
   // Pre-seleziona società dalla sidebar se filtrata
   if (currentSocietaId) sel.value = currentSocietaId;
 
-  document.getElementById('modal-gruppo').classList.add('open');
+  apriModal('modal-gruppo');
 }
 
 function chiudiModalGruppo() {
@@ -2102,7 +2098,7 @@ async function apriModalAssegna(gruppoId = null) {
     selA.appendChild(o);
   });
 
-  document.getElementById('modal-assegna').classList.add('open');
+  apriModal('modal-assegna');
 }
 
 function chiudiModalAssegna() {
@@ -2194,7 +2190,7 @@ async function apriModalTariffa() {
     if (st) document.getElementById('tar-stagione-label').value = st.nome;
   }
 
-  document.getElementById('modal-tariffa').classList.add('open');
+  apriModal('modal-tariffa');
 }
 
 function chiudiModalTariffa() {
@@ -2375,7 +2371,7 @@ async function apriModalIscrizione(atletaId) {
   // Pre-seleziona intestatario corrente
   if (isc.intestato_nome) selI.value = isc.intestato_nome;
 
-  document.getElementById('modal-iscrizione').classList.add('open');
+  apriModal('modal-iscrizione');
   // Collega listener tariffa
   const selTar = document.getElementById('isc-tariffa');
   selTar.removeEventListener('change', onTariffaChange);
@@ -2582,7 +2578,7 @@ async function apriModalPagamento(pagamentoId, atletaNome, tipo, importo, scaden
   document.getElementById('pag-ricevuta').value = '';
   document.getElementById('pag-note').value = '';
 
-  document.getElementById('modal-pagamento').classList.add('open');
+  apriModal('modal-pagamento');
 }
 
 function chiudiModalPagamento() {
@@ -2982,7 +2978,7 @@ async function apriModalSocieta(societaId) {
   }
   document.getElementById('soc-logo-file').value = '';
 
-  document.getElementById('modal-societa').classList.add('open');
+  apriModal('modal-societa');
 }
 
 function chiudiModalSocieta() {
@@ -3177,7 +3173,7 @@ async function apriModalDocumento(atletaId, atletaNome) {
     }
   }
 
-  document.getElementById('modal-documento').classList.add('open');
+  apriModal('modal-documento');
 }
 
 function chiudiModalDocumento() {
@@ -3706,7 +3702,7 @@ async function apriModalNuovoUtente() {
   });
 
   aggiornaFormUtente();
-  document.getElementById('modal-utente').classList.add('open');
+  apriModal('modal-utente');
 }
 
 function chiudiModalUtente() {
@@ -3815,7 +3811,7 @@ async function apriModalModificaUtente(id) {
   if (ss && ss.length > 0) sel.value = ss[0].societa_id;
 
   aggiornaFormModifica();
-  document.getElementById('modal-modifica-utente').classList.add('open');
+  apriModal('modal-modifica-utente');
 }
 
 function chiudiModalModificaUtente() {
@@ -3910,6 +3906,24 @@ async function salvaModificaUtente() {
 // ============================================================
 // TEMA
 // ============================================================
+// Funzione che abilita scroll su qualsiasi modal
+function apriModal(id) {
+  const overlay = document.getElementById(id);
+  if (!overlay) return;
+  overlay.classList.add('open');
+  const modal = overlay.querySelector('.modal');
+  if (modal) {
+    const maxH = Math.floor(window.innerHeight * 0.88);
+    modal.style.maxHeight = maxH + 'px';
+    modal.style.overflowY = 'auto';
+  }
+}
+
+function chiudiModal(id) {
+  const overlay = document.getElementById(id);
+  if (overlay) overlay.classList.remove('open');
+}
+
 function initTema() {
   const tema = localStorage.getItem('tema') || 'light';
   if (tema === 'dark') {
