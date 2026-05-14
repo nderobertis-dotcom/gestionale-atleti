@@ -345,14 +345,12 @@ tbody tr:last-child { border-bottom: none; }
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.6);
-  display: flex; align-items: flex-start; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   z-index: 500;
   padding: 16px;
-  overflow-y: auto;
   display: none;
 }
 .modal-overlay.open { display: flex; }
-.modal { margin: auto; }
 .modal {
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -360,9 +358,7 @@ tbody tr:last-child { border-bottom: none; }
   width: 100%;
   max-width: 560px;
   max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   box-shadow: var(--shadow);
 }
 .modal-header {
@@ -375,7 +371,7 @@ tbody tr:last-child { border-bottom: none; }
 .modal-title { font-size: 16px; font-weight: 600; }
 .modal-close { background: none; color: var(--text3); font-size: 20px; padding: 2px 6px; border-radius: 4px; transition: color 0.15s; }
 .modal-close:hover { color: var(--text); }
-.modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; min-height: 0; }
+.modal-body { padding: 20px 24px; }
 .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ============================================================
