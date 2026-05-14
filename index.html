@@ -1543,6 +1543,7 @@ async function loadUtenti() {
       '<td>' + (u.attivo ? '<span class="badge badge-green">Attivo</span>' : '<span class="badge badge-red">Disattivo</span>') + '</td>' +
       '<td style="display:flex;gap:6px">' +
         '<button class="btn btn-sm btn-secondary" data-uid="' + u.id + '" onclick="apriModalModificaUtente(this.dataset.uid)">Modifica</button>' +
+        (!isMe ? '<button class="btn btn-sm btn-secondary" data-uid="' + u.id + '" onclick="apriModalResetPwd(this.dataset.uid)">🔑 Pwd</button>' : '') +
         (!isMe ? '<button class="btn btn-sm btn-danger" data-uid="' + u.id + '" onclick="eliminaUtente(this.dataset.uid)">🗑</button>' : '') +
       '</td>' +
       '</tr>';
@@ -2937,6 +2938,36 @@ function generaHtmlRicevuta(d) {
 
 ${disclaimerAsd}
 
+<!-- MODAL RESET PASSWORD -->
+<div class="modal-overlay" id="modal-reset-pwd">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">Reimposta password</div>
+      <button class="modal-close" onclick="chiudiModal('modal-reset-pwd')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
+        Imposta una nuova password per <strong id="rpwd-utente-nome">—</strong>
+      </div>
+      <div class="field">
+        <label>Nuova password *</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="rpwd-password" placeholder="Min. 8 caratteri" style="flex:1">
+          <button class="btn btn-secondary" onclick="generaPasswordReset()" type="button">🔀 Genera</button>
+        </div>
+      </div>
+      <div id="rpwd-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px;font-size:13px;margin-top:8px;">
+        ✅ Password reimpostata e copiata negli appunti:<br>
+        <strong id="rpwd-mostrata" style="font-family:var(--mono)">—</strong>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-reset-pwd')">Chiudi</button>
+      <button class="btn btn-primary" id="btn-salva-pwd" onclick="salvaResetPwd()">🔑 Reimposta</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`}
 
@@ -3818,46 +3849,8 @@ function chiudiModalModificaUtente() {
   document.getElementById('modal-modifica-utente').classList.remove('open');
 }
 
-function generaPasswordModifica() {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
-  let pwd = '';
-  for (let i = 0; i < 10; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
-  document.getElementById('mu-nuova-password').value = pwd;
-}
 
-async function reimpostaPassword() {
-  const nuovaPwd = document.getElementById('mu-nuova-password').value.trim();
-  if (!nuovaPwd || nuovaPwd.length < 8) { toast('Password minimo 8 caratteri', 'error'); return; }
-  if (!editUtenteId) return;
 
-  try {
-    const { error } = await sb.rpc('reimposta_password_utente', {
-      p_user_id: editUtenteId,
-      p_password: nuovaPwd
-    });
-    if (error) throw new Error(error.message);
-
-    // Mostra e copia
-    document.getElementById('mu-pwd-riepilogo').style.display = 'block';
-    document.getElementById('mu-pwd-mostrata').textContent = nuovaPwd;
-
-    // Copia automatica
-    try {
-      await navigator.clipboard.writeText('Nuova password: ' + nuovaPwd + String.fromCharCode(10) + 'URL: https://app.tesserato.club');
-      toast('Password reimpostata e copiata negli appunti!', 'success');
-    } catch(e) {
-      toast('Password reimpostata con successo!', 'success');
-    }
-  } catch(e) {
-    toast('Errore: ' + e.message, 'error');
-  }
-}
-
-async function copiaNuovaPassword() {
-  const pwd = document.getElementById('mu-pwd-mostrata').textContent;
-  await navigator.clipboard.writeText(pwd);
-  toast('Password copiata!', 'success');
-}
 
 async function eliminaUtente(id) {
   if (!confirm('Eliminare questo utente? Operazione non reversibile.')) return;
@@ -3900,6 +3893,66 @@ async function salvaModificaUtente() {
   } finally {
     btn.disabled = false;
     btn.textContent = '💾 Salva modifiche';
+  }
+}
+
+
+// ============================================================
+// RESET PASSWORD UTENTE
+// ============================================================
+let resetPwdUserId = null;
+
+function generaPasswordReset() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  let pwd = '';
+  for (let i = 0; i < 10; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  document.getElementById('rpwd-password').value = pwd;
+  document.getElementById('rpwd-riepilogo').style.display = 'none';
+}
+
+async function apriModalResetPwd(userId) {
+  resetPwdUserId = userId;
+  document.getElementById('rpwd-password').value = '';
+  document.getElementById('rpwd-riepilogo').style.display = 'none';
+  document.getElementById('btn-salva-pwd').disabled = false;
+  document.getElementById('btn-salva-pwd').textContent = '🔑 Reimposta';
+
+  const { data: u } = await sb.from('profilo').select('nome, cognome').eq('id', userId).single();
+  document.getElementById('rpwd-utente-nome').textContent = u ? u.cognome + ' ' + u.nome : '—';
+
+  apriModal('modal-reset-pwd');
+  generaPasswordReset();
+}
+
+async function salvaResetPwd() {
+  const pwd = document.getElementById('rpwd-password').value.trim();
+  if (!pwd || pwd.length < 8) { toast('Password minimo 8 caratteri', 'error'); return; }
+
+  const btn = document.getElementById('btn-salva-pwd');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    const { error } = await sb.rpc('reimposta_password_utente', {
+      p_user_id: resetPwdUserId,
+      p_password: pwd
+    });
+    if (error) throw new Error(error.message);
+
+    document.getElementById('rpwd-mostrata').textContent = pwd;
+    document.getElementById('rpwd-riepilogo').style.display = 'block';
+    btn.textContent = '✓ Reimpostata';
+
+    try {
+      await navigator.clipboard.writeText(pwd);
+      toast('Password reimpostata e copiata negli appunti!', 'success');
+    } catch(e) {
+      toast('Password reimpostata!', 'success');
+    }
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '🔑 Reimposta';
   }
 }
 
@@ -4717,6 +4770,36 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModalModificaUtente()">Annulla</button>
       <button class="btn btn-primary" onclick="salvaModificaUtente()">💾 Salva modifiche</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RESET PASSWORD -->
+<div class="modal-overlay" id="modal-reset-pwd">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">Reimposta password</div>
+      <button class="modal-close" onclick="chiudiModal('modal-reset-pwd')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
+        Imposta una nuova password per <strong id="rpwd-utente-nome">—</strong>
+      </div>
+      <div class="field">
+        <label>Nuova password *</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="rpwd-password" placeholder="Min. 8 caratteri" style="flex:1">
+          <button class="btn btn-secondary" onclick="generaPasswordReset()" type="button">🔀 Genera</button>
+        </div>
+      </div>
+      <div id="rpwd-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px;font-size:13px;margin-top:8px;">
+        ✅ Password reimpostata e copiata negli appunti:<br>
+        <strong id="rpwd-mostrata" style="font-family:var(--mono)">—</strong>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-reset-pwd')">Chiudi</button>
+      <button class="btn btn-primary" id="btn-salva-pwd" onclick="salvaResetPwd()">🔑 Reimposta</button>
     </div>
   </div>
 </div>
