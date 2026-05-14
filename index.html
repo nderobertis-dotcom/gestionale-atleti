@@ -2937,126 +2937,8 @@ function generaHtmlRicevuta(d) {
 
 ${disclaimerAsd}
 
-<!-- MODAL NUOVO/MODIFICA UTENTE -->
-<div class="modal-overlay" id="modal-utente">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-header">
-      <div>
-        <div class="modal-title" id="modal-utente-title">Nuovo utente</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="modal-utente-sub">Crea un account e assegna il ruolo</div>
-      </div>
-      <button class="modal-close" onclick="chiudiModalUtente()">✕</button>
-    </div>
-    <div class="modal-body">
-
-      <div id="utente-form-nuovo">
-        <div class="field">
-          <label>Nome *</label>
-          <input type="text" id="u-nome" placeholder="MARIO" style="text-transform:uppercase">
-        </div>
-        <div class="field">
-          <label>Cognome *</label>
-          <input type="text" id="u-cognome" placeholder="ROSSI" style="text-transform:uppercase">
-        </div>
-        <div class="field">
-          <label>Email *</label>
-          <input type="email" id="u-email" placeholder="mario@esempio.it">
-        </div>
-        <div class="field">
-          <label>Password temporanea *</label>
-          <div style="display:flex;gap:8px;">
-            <input type="text" id="u-password" placeholder="Password da comunicare all'utente" style="flex:1">
-            <button class="btn btn-secondary" onclick="generaPassword()" type="button">🔀 Genera</button>
-          </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Comunica questa password all'utente via WhatsApp o email. L'utente potrà cambiarla dal suo profilo.</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Ruolo *</label>
-        <select id="u-ruolo" onchange="aggiornaFormUtente()">
-          <option value="segreteria">Segreteria</option>
-          <option value="allenatore">Allenatore</option>
-          <option value="amministratore">Amministratore</option>
-        </select>
-      </div>
-
-      <div id="u-societa-field" class="field">
-        <label>Società *</label>
-        <select id="u-societa">
-          <option value="">— Seleziona società —</option>
-        </select>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="u-societa-note">La segreteria vedrà solo i dati di questa società.</div>
-      </div>
-
-      <div id="u-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:14px;font-size:13px;margin-top:8px;">
-        <strong>✅ Profilo creato nel database</strong><br>
-        <div style="margin-top:10px;background:var(--bg3);padding:10px;border-radius:6px;font-size:12px;line-height:1.8;">
-          <strong>Ora crea l'account su Supabase:</strong><br>
-          1. Vai su <a href="https://supabase.com/dashboard" target="_blank">supabase.com</a> → Authentication → Users → Add user<br>
-          2. Email: <strong id="riep-email">—</strong><br>
-          3. Password: <strong id="riep-password" style="font-family:var(--mono)">—</strong><br>
-          4. Spunta <strong>Auto Confirm User</strong> e clicca Create user<br>
-          5. Copia il nuovo UID e aggiorna il profilo con il comando qui sotto
-        </div>
-        <div style="margin-top:8px;background:var(--bg3);padding:10px;border-radius:6px;font-size:11px;font-family:var(--mono);">
-          UUID profilo: <span id="riep-uuid" style="color:var(--accent)">—</span>
-        </div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copiaCredenziali()">📋 Copia istruzioni complete</button>
-      </div>
-
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="chiudiModalUtente()">Annulla</button>
-      <button class="btn btn-primary" id="btn-salva-utente" onclick="salvaUtente()">💾 Crea utente</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL MODIFICA UTENTE -->
-<div class="modal-overlay" id="modal-modifica-utente">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-header">
-      <div class="modal-title">Modifica utente</div>
-      <button class="modal-close" onclick="chiudiModalModificaUtente()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="background:var(--bg3);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:13px;">
-        <strong id="mu-nome-cognome">—</strong><br>
-        <span style="color:var(--text3)" id="mu-email">—</span>
-      </div>
-      <div class="field">
-        <label>Ruolo</label>
-        <select id="mu-ruolo" onchange="aggiornaFormModifica()">
-          <option value="segreteria">Segreteria</option>
-          <option value="allenatore">Allenatore</option>
-          <option value="amministratore">Amministratore</option>
-        </select>
-      </div>
-      <div id="mu-societa-field" class="field">
-        <label>Società</label>
-        <select id="mu-societa">
-          <option value="">— Seleziona società —</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Stato account</label>
-        <select id="mu-attivo">
-          <option value="true">Attivo</option>
-          <option value="false">Disattivato</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="chiudiModalModificaUtente()">Annulla</button>
-      <button class="btn btn-primary" onclick="salvaModificaUtente()">💾 Salva modifiche</button>
-    </div>
-  </div>
-</div>
-
 </body>
-</html>`
-}
+</html>`}
 
 
 // ============================================================
@@ -4204,7 +4086,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
 
 <!-- MODAL NUOVO GRUPPO -->
 <div class="modal-overlay" id="modal-gruppo">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:520px;overflow-y:auto;max-height:90vh">
     <div class="modal-header">
       <div class="modal-title">Nuovo gruppo / squadra</div>
       <button class="modal-close" onclick="chiudiModalGruppo()">✕</button>
@@ -4782,7 +4664,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
 
 <!-- MODAL MODIFICA UTENTE -->
 <div class="modal-overlay" id="modal-modifica-utente">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:480px;overflow-y:auto;max-height:90vh">
     <div class="modal-header">
       <div class="modal-title">Modifica utente</div>
       <button class="modal-close" onclick="chiudiModalModificaUtente()">✕</button>
