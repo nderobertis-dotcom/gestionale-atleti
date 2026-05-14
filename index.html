@@ -358,7 +358,9 @@ tbody tr:last-child { border-bottom: none; }
   width: 100%;
   max-width: 560px;
   max-height: 90vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow);
 }
 .modal-header {
@@ -371,7 +373,7 @@ tbody tr:last-child { border-bottom: none; }
 .modal-title { font-size: 16px; font-weight: 600; }
 .modal-close { background: none; color: var(--text3); font-size: 20px; padding: 2px 6px; border-radius: 4px; transition: color 0.15s; }
 .modal-close:hover { color: var(--text); }
-.modal-body { padding: 20px 24px; }
+.modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
 .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ============================================================
@@ -2990,13 +2992,19 @@ ${disclaimerAsd}
       </div>
 
       <div id="u-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:14px;font-size:13px;margin-top:8px;">
-        <strong>Credenziali da comunicare:</strong><br>
-        <div style="margin-top:8px;font-family:var(--mono);background:var(--bg3);padding:10px;border-radius:6px;font-size:12px;">
-          Email: <span id="riep-email">—</span><br>
-          Password: <span id="riep-password">—</span><br>
-          URL: <a href="https://app.tesserato.club" target="_blank">https://app.tesserato.club</a>
+        <strong>✅ Profilo creato nel database</strong><br>
+        <div style="margin-top:10px;background:var(--bg3);padding:10px;border-radius:6px;font-size:12px;line-height:1.8;">
+          <strong>Ora crea l'account su Supabase:</strong><br>
+          1. Vai su <a href="https://supabase.com/dashboard" target="_blank">supabase.com</a> → Authentication → Users → Add user<br>
+          2. Email: <strong id="riep-email">—</strong><br>
+          3. Password: <strong id="riep-password" style="font-family:var(--mono)">—</strong><br>
+          4. Spunta <strong>Auto Confirm User</strong> e clicca Create user<br>
+          5. Copia il nuovo UID e aggiorna il profilo con il comando qui sotto
         </div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copiaCredenziali()">📋 Copia credenziali</button>
+        <div style="margin-top:8px;background:var(--bg3);padding:10px;border-radius:6px;font-size:11px;font-family:var(--mono);">
+          UUID profilo: <span id="riep-uuid" style="color:var(--accent)">—</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copiaCredenziali()">📋 Copia istruzioni complete</button>
       </div>
 
     </div>
@@ -3824,8 +3832,13 @@ function chiudiModalUtente() {
 function copiaCredenziali() {
   const email = document.getElementById('riep-email').textContent;
   const pwd = document.getElementById('riep-password').textContent;
-  const testo = 'Credenziali Tesserato.club' + String.fromCharCode(10) + 'Email: ' + email + String.fromCharCode(10) + 'Password: ' + pwd + String.fromCharCode(10) + 'URL: https://app.tesserato.club';
-  navigator.clipboard.writeText(testo).then(() => toast('Credenziali copiate negli appunti!', 'success'));
+  const uuid = document.getElementById('riep-uuid').textContent;
+  const testo = 'NUOVO UTENTE TESSERATO.CLUB' + String.fromCharCode(10) +
+    'Email: ' + email + String.fromCharCode(10) +
+    'Password: ' + pwd + String.fromCharCode(10) +
+    'URL: https://app.tesserato.club' + String.fromCharCode(10) +
+    'UUID profilo: ' + uuid;
+  navigator.clipboard.writeText(testo).then(() => toast('Istruzioni copiate negli appunti!', 'success'));
 }
 
 async function salvaUtente() {
@@ -3847,36 +3860,41 @@ async function salvaUtente() {
   btn.textContent = 'Creazione...';
 
   try {
-    // Chiama funzione RPC che crea utente auth + profilo + società in un unico step
-    const { data: userId, error: rpcError } = await sb.rpc('crea_utente_completo', {
-      p_email: email,
-      p_password: password,
-      p_nome: nome,
-      p_cognome: cognome,
-      p_ruolo: ruolo,
-      p_societa_id: (ruolo !== 'amministratore' && societaId) ? societaId : null
+    // 1. Genera UUID per il nuovo utente
+    const newId = crypto.randomUUID();
+
+    // 2. Crea solo il profilo nel database
+    const { error: profError } = await sb.from('profilo').insert({
+      id: newId, nome, cognome, email, ruolo, attivo: true
     });
+    if (profError) throw new Error(profError.message);
 
-    if (rpcError) throw new Error(rpcError.message);
-    if (!userId) throw new Error('Utente non creato');
+    // 3. Collega società se necessario
+    if (ruolo === 'segreteria' && societaId) {
+      await sb.from('segreteria_societa').insert({ profilo_id: newId, societa_id: societaId });
+    }
 
-    // Mostra riepilogo credenziali
+    // 4. Mostra istruzioni per creare l'utente su Supabase
     document.getElementById('utente-form-nuovo').style.display = 'none';
     document.getElementById('u-riepilogo').style.display = 'block';
     document.getElementById('riep-email').textContent = email;
     document.getElementById('riep-password').textContent = password;
-    btn.textContent = '✓ Utente creato';
+    document.getElementById('riep-uuid').textContent = newId;
+    btn.textContent = '✓ Profilo creato';
 
-    // Copia automatica negli appunti
-    const testoCredenziali = 'Credenziali Tesserato.club' + String.fromCharCode(10) +
-      'Email: ' + email + String.fromCharCode(10) +
-      'Password: ' + password + String.fromCharCode(10) +
-      'URL: https://app.tesserato.club';
+    // Copia automatica istruzioni negli appunti
+    const testo = 'NUOVO UTENTE TESSERATO.CLUB' + String.fromCharCode(10) +
+      '1. Vai su: https://supabase.com → Authentication → Users → Add user' + String.fromCharCode(10) +
+      '2. Email: ' + email + String.fromCharCode(10) +
+      '3. Password: ' + password + String.fromCharCode(10) +
+      '4. Spunta Auto Confirm User' + String.fromCharCode(10) +
+      '5. IMPORTANTE: dopo la creazione, aggiorna l UUID nel profilo:' + String.fromCharCode(10) +
+      '   UUID profilo attuale: ' + newId;
     try {
-      await navigator.clipboard.writeText(testoCredenziali);
-      toast('Utente creato! Credenziali copiate negli appunti automaticamente.', 'success');
+      await navigator.clipboard.writeText(testo);
+      toast('Profilo creato! Istruzioni copiate negli appunti.', 'success');
     } catch(e) {
-      toast('Utente creato con successo!', 'success');
+      toast('Profilo creato con successo!', 'success');
     }
     loadUtenti();
 
@@ -4741,13 +4759,19 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       </div>
 
       <div id="u-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:14px;font-size:13px;margin-top:8px;">
-        <strong>Credenziali da comunicare:</strong><br>
-        <div style="margin-top:8px;font-family:var(--mono);background:var(--bg3);padding:10px;border-radius:6px;font-size:12px;">
-          Email: <span id="riep-email">—</span><br>
-          Password: <span id="riep-password">—</span><br>
-          URL: <a href="https://app.tesserato.club" target="_blank">https://app.tesserato.club</a>
+        <strong>✅ Profilo creato nel database</strong><br>
+        <div style="margin-top:10px;background:var(--bg3);padding:10px;border-radius:6px;font-size:12px;line-height:1.8;">
+          <strong>Ora crea l'account su Supabase:</strong><br>
+          1. Vai su <a href="https://supabase.com/dashboard" target="_blank">supabase.com</a> → Authentication → Users → Add user<br>
+          2. Email: <strong id="riep-email">—</strong><br>
+          3. Password: <strong id="riep-password" style="font-family:var(--mono)">—</strong><br>
+          4. Spunta <strong>Auto Confirm User</strong> e clicca Create user<br>
+          5. Copia il nuovo UID e aggiorna il profilo con il comando qui sotto
         </div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copiaCredenziali()">📋 Copia credenziali</button>
+        <div style="margin-top:8px;background:var(--bg3);padding:10px;border-radius:6px;font-size:11px;font-family:var(--mono);">
+          UUID profilo: <span id="riep-uuid" style="color:var(--accent)">—</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="copiaCredenziali()">📋 Copia istruzioni complete</button>
       </div>
 
     </div>
