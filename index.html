@@ -2819,6 +2819,7 @@ function generaHtmlRicevuta(d) {
     ? "<p style='font-size:10px;color:#666;border-top:1px solid #eee;padding-top:10px;margin-top:20px;'>ASD - Ricevuta emessa ai sensi art. 4 DPR 633/72. Non soggetta ad IVA.</p>"
     : "<p style='font-size:10px;color:#666;border-top:1px solid #eee;padding-top:10px;margin-top:20px;'>Documento non avente valore fiscale. Per uso interno.</p>";
 
+  // ###PDF_TEMPLATE_START###
   return `<!DOCTYPE html>
 <html lang="it">
 <head>
@@ -3032,88 +3033,9 @@ function generaHtmlRicevuta(d) {
 
 ${disclaimerAsd}
 
-<!-- MODAL RESET PASSWORD -->
-<div class="modal-overlay" id="modal-reset-pwd">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-header">
-      <div class="modal-title">Reimposta password</div>
-      <button class="modal-close" onclick="chiudiModal('modal-reset-pwd')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
-        Imposta una nuova password per <strong id="rpwd-utente-nome">—</strong>
-      </div>
-      <div class="field">
-        <label>Nuova password *</label>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="rpwd-password" placeholder="Min. 8 caratteri" style="flex:1">
-          <button class="btn btn-secondary" onclick="generaPasswordReset()" type="button">🔀 Genera</button>
-        </div>
-      </div>
-      <div id="rpwd-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px;font-size:13px;margin-top:8px;">
-        ✅ Password reimpostata e copiata negli appunti:<br>
-        <strong id="rpwd-mostrata" style="font-family:var(--mono)">—</strong>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="chiudiModal('modal-reset-pwd')">Chiudi</button>
-      <button class="btn btn-primary" id="btn-salva-pwd" onclick="salvaResetPwd()">🔑 Reimposta</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL AGGIUNGI SEGRETERIA -->
-<div class="modal-overlay" id="modal-segreteria">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-header">
-      <div class="modal-title">Aggiungi segreteria</div>
-      <button class="modal-close" onclick="chiudiModal('modal-segreteria')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
-        Aggiungi un utente segreteria a una società già esistente nel sistema.
-      </div>
-      <div class="field">
-        <label>Società *</label>
-        <select id="seg-societa-id"></select>
-      </div>
-      <div class="field">
-        <label>Nome *</label>
-        <input type="text" id="seg-nome" style="text-transform:uppercase">
-      </div>
-      <div class="field">
-        <label>Cognome *</label>
-        <input type="text" id="seg-cognome" style="text-transform:uppercase">
-      </div>
-      <div class="field">
-        <label>Email *</label>
-        <input type="email" id="seg-email">
-      </div>
-      <div class="field">
-        <label>Password temporanea *</label>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="seg-password" style="flex:1;font-family:var(--mono)">
-          <button class="btn btn-secondary" onclick="generaPasswordSeg()" type="button">🔀</button>
-        </div>
-      </div>
-      <div id="seg-riepilogo" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px;font-size:12px;margin-top:8px;">
-        <strong>Profilo creato!</strong> Ora vai su Supabase → Authentication → Users → Add user e crea l account con:<br>
-        <div style="font-family:var(--mono);margin-top:6px;background:var(--bg3);padding:8px;border-radius:4px;">
-          Email: <span id="seg-riep-email">—</span><br>
-          Password: <span id="seg-riep-pwd">—</span>
-        </div>
-        <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="copiaCredSeg()">📋 Copia</button>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="chiudiModal('modal-segreteria')">Chiudi</button>
-      <button class="btn btn-primary" id="btn-salva-seg" onclick="salvaSegreteria()">💾 Crea segreteria</button>
-    </div>
-  </div>
-</div>
-
 </body>
-</html>`}
+</html>`; // ###PDF_TEMPLATE_END###
+}
 
 
 // ============================================================
