@@ -1379,7 +1379,7 @@ async function loadAtleti() {
         if (giorni <= 60) return '<span class="badge badge-yellow">' + giorni + ' gg</span>';
         return '<span class="badge badge-green">Valido</span>';
       })()}</td>
-      <td><button class="btn btn-sm btn-secondary" onclick="apriAtleta('${a.id}')">Apri</button></td>
+       <td style='display:flex;gap:6px;'><button class="btn btn-sm btn-secondary" onclick="apriAtleta('${a.id}')">Apri</button><button class="btn btn-sm btn-secondary" onclick="apriAttestazioneAtleta('${a.id}', '${a.cognome} ${a.nome}')">📜</button></td>
     </tr>`;
   }).join('');
 }
