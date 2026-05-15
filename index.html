@@ -3788,7 +3788,7 @@ function aggiornaFormUtente() {
   const ruolo = document.getElementById('u-ruolo').value;
   const socField = document.getElementById('u-societa-field');
   const note = document.getElementById('u-societa-note');
-  if (ruolo === 'amministratore') {
+  if (ruolo === 'amministratore' || ruolo === 'genitore') {
     socField.style.display = 'none';
   } else {
     socField.style.display = 'block';
@@ -5274,6 +5274,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <select id="u-ruolo" onchange="aggiornaFormUtente()">
           <option value="segreteria">Segreteria</option>
           <option value="allenatore">Allenatore</option>
+          <option value="genitore">Genitore</option>
           <option value="amministratore">Amministratore</option>
         </select>
       </div>
@@ -5327,6 +5328,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <select id="mu-ruolo" onchange="aggiornaFormModifica()">
           <option value="segreteria">Segreteria</option>
           <option value="allenatore">Allenatore</option>
+          <option value="genitore">Genitore</option>
           <option value="amministratore">Amministratore</option>
         </select>
       </div>
