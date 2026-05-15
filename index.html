@@ -4768,7 +4768,7 @@ initTema();
 // Collegamento bottone nuovo atleta
 document.getElementById('btn-nuovo-atleta')?.addEventListener('click', apriModalAtleta);
 document.getElementById('btn-nuovo-gruppo')?.addEventListener('click', apriModalGruppo);
-  document.getElementById('btn-nuovo-genitore')?.addEventListener('click', apriModalGenitore);
+  document.getElementById('btn-nuovo-genitore')?.addEventListener('click', () => apriModalGenitore(null));
 document.getElementById('btn-nuovo-utente')?.addEventListener('click', apriModalNuovoUtente);
   document.getElementById('btn-nuova-segreteria')?.addEventListener('click', apriModalSegreteria);
 document.getElementById('btn-nuovo-documento')?.addEventListener('click', () => {
