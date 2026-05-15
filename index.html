@@ -4119,6 +4119,203 @@ async function attivaOnboarding() {
 }
 function onbReset() { initOnboarding(); }
 
+
+// ============================================================
+// ATTESTAZIONE PARTECIPAZIONE SPORTIVA
+// ============================================================
+async function apriAttestazioneAtleta(atletaId, atletaNome) {
+  try {
+    // Carica dati atleta
+    const { data: a } = await sb.from('atleta')
+      .select('id, nome, cognome, codice_fiscale, data_nascita, comune_nascita, provincia_nascita, maggiorenne')
+      .eq('id', atletaId).single();
+    if (!a) { toast('Atleta non trovato', 'error'); return; }
+
+    // Carica iscrizione e società
+    const { data: isc } = await sb.from('iscrizione')
+      .select('stato, stagione(nome), iscrizione_gruppo(gruppo(nome, societa(id, nome, tipo, codice_fiscale, partita_iva, indirizzo, comune, provincia, cap, telefono, email, pec, logo_url, testo_ricevuta)))')
+      .eq('atleta_id', atletaId)
+      .eq('stagione_id', currentStagioneId)
+      .single();
+
+    const societa = isc?.iscrizione_gruppo?.[0]?.gruppo?.societa;
+    const stagione = isc?.stagione?.nome || currentStagioneNome || '2026/2027';
+    const gruppo = isc?.iscrizione_gruppo?.[0]?.gruppo?.nome || '';
+
+    if (!societa) { toast('Nessuna iscrizione trovata per la stagione corrente', 'error'); return; }
+
+    // Carica società completa per avere tutti i dati
+    const { data: socCompleta } = await sb.from('societa').select('*').eq('id', societa.id).single();
+
+    // Converti logo in base64
+    let logoBase64 = null;
+    if (socCompleta?.logo_url) {
+      try {
+        const resp = await fetch(socCompleta.logo_url);
+        const blob = await resp.blob();
+        logoBase64 = await new Promise((res) => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      } catch(e) { console.warn('Logo non caricato'); }
+    }
+
+    // Genera numero attestazione (data + initials)
+    const oggi = new Date();
+    const numAtt = stagione.replace('/', '-') + '/' + a.cognome.substring(0,3).toUpperCase() + '/' + String(oggi.getDate()).padStart(2,'0') + String(oggi.getMonth()+1).padStart(2,'0') + oggi.getFullYear();
+    const dataOggi = oggi.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    const html = generaHtmlAttestazione({
+      societa: socCompleta,
+      atleta: a,
+      stagione,
+      gruppo,
+      logoBase64,
+      numAtt,
+      dataOggi,
+    });
+
+    // Chiudi modal aperti
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 600);
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+function generaHtmlAttestazione(d) {
+  const soc = d.societa || {};
+  const a = d.atleta || {};
+
+  const fmtData = (s) => {
+    if (!s) return '—';
+    const p = s.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  };
+
+  const socIndirizzo = [soc.indirizzo, soc.comune, soc.provincia ? '(' + soc.provincia + ')' : null, soc.cap].filter(Boolean).join(' ');
+  const socContatti = [soc.telefono ? 'Tel: ' + soc.telefono : null, soc.email ? 'Email: ' + soc.email : null, soc.pec ? 'PEC: ' + soc.pec : null].filter(Boolean).join('  |  ');
+
+  const tipoSocLabel = { asd: 'Associazione Sportiva Dilettantistica', ssd: 'Societa Sportiva Dilettantistica', srl: 'S.r.l. Sportiva', altro: '' };
+
+  return `<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Attestazione ${d.numAtt}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  @page { size: A4 portrait; margin: 2cm; }
+  body { font-family: 'Times New Roman', serif; font-size: 12pt; color: #1a1a1a; background: #fff; line-height: 1.6; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #1a1a1a; }
+  .logo-box { width: 120px; }
+  .logo-box img { max-width: 120px; max-height: 80px; object-fit: contain; }
+  .logo-placeholder { width: 120px; height: 60px; }
+  .societa-info { flex: 1; padding: 0 20px; }
+  .societa-nome { font-size: 16pt; font-weight: bold; margin-bottom: 3px; }
+  .societa-tipo { font-size: 10pt; color: #444; margin-bottom: 6px; }
+  .societa-dati { font-size: 9pt; color: #555; line-height: 1.7; }
+  .num-box { text-align: right; font-size: 10pt; }
+  .num-label { color: #555; font-size: 9pt; }
+  .num-value { font-family: 'Courier New', monospace; font-weight: bold; font-size: 11pt; }
+  .titolo { text-align: center; margin: 32px 0 24px; }
+  .titolo h1 { font-size: 18pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid #999; padding-bottom: 8px; display: inline-block; }
+  .sezione { margin-bottom: 20px; }
+  .sezione-titolo { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #666; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 10px; }
+  .dati-row { display: flex; gap: 0; margin-bottom: 4px; }
+  .dati-label { width: 180px; font-weight: bold; font-size: 11pt; flex-shrink: 0; }
+  .dati-value { font-size: 11pt; border-bottom: 1px solid #ddd; flex: 1; padding-bottom: 2px; }
+  .testo { text-align: justify; font-size: 11.5pt; line-height: 1.9; margin: 24px 0; padding: 20px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; }
+  .testo strong { font-size: 12pt; }
+  .data-luogo { margin: 28px 0 8px; font-size: 11pt; }
+  .firme { display: flex; justify-content: space-between; margin-top: 48px; }
+  .firma-box { text-align: center; width: 42%; }
+  .firma-linea { border-top: 1px solid #666; padding-top: 6px; font-size: 10pt; color: #444; margin-top: 48px; }
+  .timbro { width: 100px; height: 100px; border: 1px dashed #aaa; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9pt; color: #aaa; margin: 0 auto 4px; }
+  @media print {
+    body { padding: 0; }
+    @page { size: A4 portrait; margin: 2cm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-box">
+    ${d.logoBase64 ? '<img src="' + d.logoBase64 + '" alt="Logo">' : '<div class="logo-placeholder"></div>'}
+  </div>
+  <div class="societa-info">
+    <div class="societa-nome">${soc.nome || '—'}</div>
+    <div class="societa-tipo">${tipoSocLabel[soc.tipo] || ''}</div>
+    <div class="societa-dati">
+      ${soc.codice_fiscale ? 'C.F.: ' + soc.codice_fiscale : ''}${soc.partita_iva ? '  |  P.IVA: ' + soc.partita_iva : ''}<br>
+      ${socIndirizzo}<br>
+      ${socContatti}
+    </div>
+  </div>
+  <div class="num-box">
+    <div class="num-label">N. Prot.</div>
+    <div class="num-value">${d.numAtt}</div>
+    <div class="num-label" style="margin-top:8px">Data</div>
+    <div style="font-size:11pt">${d.dataOggi}</div>
+  </div>
+</div>
+
+<div class="titolo">
+  <h1>Attestazione di partecipazione sportiva</h1>
+</div>
+
+<div class="sezione">
+  <div class="sezione-titolo">Stagione sportiva</div>
+  <div class="dati-row"><span class="dati-label">Stagione:</span><span class="dati-value">${d.stagione}</span></div>
+  ${d.gruppo ? '<div class="dati-row"><span class="dati-label">Gruppo / Squadra:</span><span class="dati-value">' + d.gruppo + '</span></div>' : ''}
+</div>
+
+<div class="sezione">
+  <div class="sezione-titolo">Dati atleta</div>
+  <div class="dati-row"><span class="dati-label">Cognome e Nome:</span><span class="dati-value">${a.cognome || ''} ${a.nome || ''}</span></div>
+  ${a.codice_fiscale ? '<div class="dati-row"><span class="dati-label">Codice Fiscale:</span><span class="dati-value">' + a.codice_fiscale + '</span></div>' : ''}
+  ${a.data_nascita ? '<div class="dati-row"><span class="dati-label">Data di nascita:</span><span class="dati-value">' + fmtData(a.data_nascita) + '</span></div>' : ''}
+  ${a.comune_nascita ? '<div class="dati-row"><span class="dati-label">Luogo di nascita:</span><span class="dati-value">' + a.comune_nascita + (a.provincia_nascita ? ' (' + a.provincia_nascita + ')' : '') + '</span></div>' : ''}
+</div>
+
+<div class="testo">
+  La <strong>${soc.nome || 'sottoscritta società sportiva'}</strong> certifica che l'atleta <strong>${a.cognome || ''} ${a.nome || ''}</strong>,
+  nell'ambito della stagione sportiva <strong>${d.stagione}</strong>,
+  ha svolto regolare attività sportiva presso la nostra società partecipando con impegno, continuità
+  e regolarità alle attività di allenamento, preparazione e alle competizioni ufficiali previste
+  nell'ambito della stagione sportiva sopra indicata.
+  <br><br>
+  L'atleta ha preso parte alle attività federali e/o ai campionati organizzati secondo i regolamenti
+  vigenti, dimostrando partecipazione, correttezza sportiva e continuità nell'impegno.
+  <br><br>
+  La presente attestazione viene rilasciata su richiesta dell'interessato/a per gli usi consentiti
+  dalla normativa vigente e, in particolare, ai fini del riconoscimento del credito sportivo/scolastico.
+</div>
+
+<div class="data-luogo">${soc.comune || '____________'}, ${d.dataOggi}</div>
+
+<div class="firme">
+  <div class="firma-box">
+    <div class="timbro">Timbro</div>
+    <div class="firma-linea">Timbro della società</div>
+  </div>
+  <div class="firma-box">
+    <div class="firma-linea">Il Presidente / Responsabile<br>${soc.nome || ''}</div>
+  </div>
+</div>
+
+</body>
+</html>`; // ###ATTESTAZIONE_TEMPLATE_END###
+}
+
 // ============================================================
 // RESET PASSWORD UTENTE
 // ============================================================
