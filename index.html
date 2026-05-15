@@ -3794,7 +3794,10 @@ function aggiornaFormUtente() {
 
 function aggiornaFormModifica() {
   const ruolo = document.getElementById('mu-ruolo').value;
-  document.getElementById('mu-societa-field').style.display = ruolo === 'amministratore' ? 'none' : 'block';
+  const isAdmin   = ruolo === 'amministratore';
+  const isGenitore = ruolo === 'genitore';
+  document.getElementById('mu-societa-field').style.display  = (isAdmin || isGenitore) ? 'none' : 'block';
+  document.getElementById('mu-genitore-field').style.display = isGenitore ? 'block' : 'none';
 }
 
 async function apriModalNuovoUtente() {
@@ -3915,7 +3918,7 @@ async function apriModalModificaUtente(id) {
   document.getElementById('mu-ruolo').value = u.ruolo;
   document.getElementById('mu-attivo').value = u.attivo ? 'true' : 'false';
 
-  // Popola società
+  // Popola select società (segreteria / allenatore)
   const sel = document.getElementById('mu-societa');
   sel.innerHTML = '<option value="">— Seleziona società —</option>';
   const { data: societa } = await sb.from('societa').select('id, nome').order('nome');
@@ -3925,9 +3928,24 @@ async function apriModalModificaUtente(id) {
     sel.appendChild(o);
   });
 
-  // Società attuale - carica e pre-seleziona
+  // Popola select genitori
+  const selG = document.getElementById('mu-genitore');
+  selG.innerHTML = '<option value="">— Seleziona genitore —</option>';
+  const { data: genitori } = await sb.from('genitore').select('id, cognome, nome').order('cognome');
+  if (genitori) genitori.forEach(g => {
+    const o = document.createElement('option');
+    o.value = g.id;
+    o.textContent = g.cognome + ' ' + g.nome;
+    selG.appendChild(o);
+  });
+
+  // Pre-seleziona società attuale
   const { data: ss } = await sb.from('segreteria_societa').select('societa_id').eq('profilo_id', id);
   if (ss && ss.length > 0) sel.value = ss[0].societa_id;
+
+  // Pre-seleziona genitore attuale
+  const { data: pg } = await sb.from('profilo_genitore').select('genitore_id').eq('profilo_id', id).maybeSingle();
+  if (pg?.genitore_id) selG.value = pg.genitore_id;
 
   aggiornaFormModifica();
   apriModal('modal-modifica-utente');
@@ -3955,6 +3973,7 @@ async function eliminaUtente(id) {
 async function salvaModificaUtente() {
   const ruolo = document.getElementById('mu-ruolo').value;
   const societaId = document.getElementById('mu-societa').value;
+  const genitoreId = document.getElementById('mu-genitore').value;
   const attivo = document.getElementById('mu-attivo').value === 'true';
 
   const btn = document.querySelector('#modal-modifica-utente .btn-primary');
@@ -3966,10 +3985,17 @@ async function salvaModificaUtente() {
     const { error } = await sb.from('profilo').update({ ruolo, attivo }).eq('id', editUtenteId);
     if (error) throw new Error(error.message);
 
-    // Aggiorna società segreteria
+    // Aggiorna collegamento società (segreteria / allenatore)
     await sb.from('segreteria_societa').delete().eq('profilo_id', editUtenteId);
     if (ruolo === 'segreteria' && societaId) {
       await sb.from('segreteria_societa').insert({ profilo_id: editUtenteId, societa_id: societaId });
+    }
+
+    // Aggiorna collegamento genitore
+    await sb.from('profilo_genitore').delete().eq('profilo_id', editUtenteId);
+    if (ruolo === 'genitore' && genitoreId) {
+      const { error: pgErr } = await sb.from('profilo_genitore').insert({ profilo_id: editUtenteId, genitore_id: genitoreId });
+      if (pgErr) throw new Error('Collegamento genitore fallito: ' + pgErr.message);
     }
 
     toast('Utente aggiornato!', 'success');
@@ -5639,6 +5665,13 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <select id="mu-societa">
           <option value="">— Seleziona società —</option>
         </select>
+      </div>
+      <div id="mu-genitore-field" class="field" style="display:none">
+        <label>Collega a genitore</label>
+        <select id="mu-genitore">
+          <option value="">— Seleziona genitore —</option>
+        </select>
+        <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">Il genitore deve essere già registrato in anagrafica</small>
       </div>
       <div class="field">
         <label>Stato account</label>
