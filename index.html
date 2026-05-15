@@ -1128,6 +1128,7 @@ let currentUser = null;
 let currentProfilo = null;
 let currentSocietaId = null;
 let currentStagioneId = null;
+let currentStagioneNome = null;
 
 // ============================================================
 // MENU PER RUOLO
@@ -1253,7 +1254,10 @@ function getActiveSection() {
 // ============================================================
 async function loadStagione() {
   const { data } = await sb.from('stagione').select('id, nome').eq('attiva', true).single();
-  if (data) currentStagioneId = data.id;
+  if (data) {
+    currentStagioneId = data.id;
+    currentStagioneNome = data.nome;
+  }
 }
 
 // ============================================================
@@ -1716,7 +1720,7 @@ async function loadTariffe() {
 // ============================================================
 async function loadUtenti() {
   const { data } = await sb.from('profilo')
-    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome))')
+    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(cognome, nome))')
     .order('cognome');
   const tbody = document.getElementById('tbody-utenti');
   if (!data || data.length === 0) {
@@ -1725,13 +1729,22 @@ async function loadUtenti() {
   }
   const ruoliLabel = { amministratore: '🔑 Admin', segreteria: '📋 Segreteria', allenatore: '🏃 Allenatore', genitore: '👨‍👩‍👧 Genitore' };
   tbody.innerHTML = data.map(u => {
-    const societa = u.segreteria_societa?.[0]?.societa?.nome || '—';
+    let infoCol = '—';
+    if (u.ruolo === 'genitore') {
+      const g = u.profilo_genitore?.[0]?.genitore;
+      infoCol = g ? g.cognome + ' ' + g.nome : '<span style="color:var(--danger);font-size:12px">⚠ Non collegato</span>';
+    } else if (u.ruolo === 'segreteria' || u.ruolo === 'allenatore') {
+      const soc = u.segreteria_societa?.[0]?.societa?.nome;
+      infoCol = soc || '—';
+    }
     const isMe = u.id === currentUser?.id;
     return '<tr>' +
       '<td><strong>' + (u.cognome || '') + ' ' + (u.nome || '') + '</strong></td>' +
       '<td style="color:var(--text2);font-size:12px">' + (u.email || '') + '</td>' +
       '<td><span class="badge badge-gray">' + (ruoliLabel[u.ruolo] || u.ruolo) + '</span></td>' +
-      '<td>' + (societa !== '—' ? '<span class="badge badge-gray">' + societa + '</span>' : '<span style="color:var(--text3)">—</span>') + '</td>' +
+      '<td>' + (infoCol !== '—' && !infoCol.includes('⚠')
+        ? '<span class="badge badge-gray">' + infoCol + '</span>'
+        : infoCol) + '</td>' +
       '<td>' + (u.attivo ? '<span class="badge badge-green">Attivo</span>' : '<span class="badge badge-red">Disattivo</span>') + '</td>' +
       '<td style="display:flex;gap:6px">' +
         '<button class="btn btn-sm btn-secondary" data-uid="' + u.id + '" onclick="apriModalModificaUtente(this.dataset.uid)">Modifica</button>' +
@@ -2198,8 +2211,76 @@ document.addEventListener('click', e => {
 
 
 
-function apriSchedaGenitore(id) {
-  apriModalGenitore(id);
+async function apriSchedaGenitore(id) {
+  try {
+    const { data: g } = await sb.from('genitore')
+      .select('*, atleta_genitore(relazione, referente_principale, atleta(id, cognome, nome, data_nascita, codice_fiscale))')
+      .eq('id', id).single();
+    if (!g) { toast('Genitore non trovato', 'error'); return; }
+
+    // Cerca se ha un account piattaforma collegato
+    const { data: pg } = await sb.from('profilo_genitore')
+      .select('profilo(email, attivo)').eq('genitore_id', id).maybeSingle();
+    const account = pg?.profilo;
+
+    const infoRiga = (label, val) => !val ? '' :
+      `<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span style="min-width:120px;flex-shrink:0;color:var(--text3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;padding-top:2px">${label}</span>
+        <span style="flex:1">${val}</span>
+      </div>`;
+
+    const figliHtml = (g.atleta_genitore || []).map(ag => {
+      const a = ag.atleta;
+      if (!a) return '';
+      const eta = a.data_nascita ? Math.floor((Date.now() - new Date(a.data_nascita)) / 31557600000) : null;
+      return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;font-size:14px">${a.cognome} ${a.nome}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${a.codice_fiscale || ''}${eta !== null ? ' · ' + eta + ' anni' : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${ag.referente_principale ? '<span class="badge badge-green">Referente</span>' : ''}
+          <span class="badge badge-gray">${ag.relazione || 'genitore'}</span>
+          <button class="btn btn-sm btn-secondary" onclick="chiudiModal('modal-scheda-genitore');apriAtleta('${a.id}')">Apri atleta</button>
+        </div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text3);font-size:13px">Nessun atleta collegato</p>';
+
+    const accountHtml = account
+      ? `<div style="background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.25);border-radius:var(--radius);padding:10px 14px;font-size:13px;">
+          ✅ Account attivo — <strong>${account.email}</strong>
+          ${!account.attivo ? ' <span class="badge badge-red">Disattivato</span>' : ''}
+        </div>`
+      : `<div style="background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--text2);">
+          ⚠ Nessun accesso piattaforma configurato
+        </div>`;
+
+    const sezione = (titolo, contenuto) =>
+      `<div style="margin-bottom:20px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding-bottom:8px;border-bottom:2px solid var(--border);margin-bottom:4px;">${titolo}</div>
+        ${contenuto}
+      </div>`;
+
+    document.getElementById('scheda-genitore-body').innerHTML =
+      sezione('Dati anagrafici',
+        infoRiga('Cognome e Nome', `<strong>${g.cognome} ${g.nome}</strong>`) +
+        infoRiga('Codice fiscale', g.codice_fiscale ? `<span style="font-family:var(--mono)">${g.codice_fiscale}</span>` : null) +
+        infoRiga('Telefono', g.telefono ? `<a href="tel:${g.telefono}" style="color:var(--accent)">${g.telefono}</a>` : null) +
+        infoRiga('Email', g.email ? `<a href="mailto:${g.email}" style="color:var(--accent)">${g.email}</a>` : null) +
+        infoRiga('Indirizzo', g.indirizzo ? `${g.indirizzo}, ${g.comune || ''} ${g.provincia ? '(' + g.provincia + ')' : ''}` : null)
+      ) +
+      sezione('Atleti collegati', figliHtml) +
+      sezione('Accesso piattaforma', accountHtml);
+
+    document.getElementById('scheda-genitore-modifica').onclick = () => {
+      chiudiModal('modal-scheda-genitore');
+      apriModalGenitore(id);
+    };
+
+    apriModal('modal-scheda-genitore');
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
 }
 
 // ============================================================
@@ -5934,6 +6015,23 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-genitore')">Annulla</button>
       <button class="btn btn-primary" onclick="salvaGenitore()">💾 Salva genitore</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SCHEDA GENITORE (read-only) -->
+<div class="modal-overlay" id="modal-scheda-genitore">
+  <div class="modal" style="max-width:560px;overflow-y:auto;max-height:90vh">
+    <div class="modal-header">
+      <div class="modal-title">Scheda genitore</div>
+      <button class="modal-close" onclick="chiudiModal('modal-scheda-genitore')">✕</button>
+    </div>
+    <div class="modal-body" id="scheda-genitore-body">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-scheda-genitore')">Chiudi</button>
+      <button class="btn btn-primary" id="scheda-genitore-modifica">✏️ Modifica</button>
     </div>
   </div>
 </div>
