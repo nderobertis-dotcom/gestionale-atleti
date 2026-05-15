@@ -1404,7 +1404,7 @@ async function apriAtleta(id) {
 // GENITORI
 // ============================================================
 async function loadGenitori() {
-  const { data } = await sb.from('genitore').select('*').order('cognome');
+  const { data } = await sb.from('genitore').select('*, atleta_genitore(atleta(cognome, nome))').order('cognome');
   const tbody = document.getElementById('tbody-genitori');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👨‍👩‍👧</div><p>Nessun genitore registrato</p></div></td></tr>';
@@ -1417,15 +1417,10 @@ async function loadGenitori() {
       '<td style="font-family:var(--mono)">' + (g.codice_fiscale || '—') + '</td>' +
       '<td>' + (g.telefono || '—') + '</td>' +
       '<td>' + (g.email || '—') + '</td>' +
-      '<td>—</td>' +
+      '<td>' + (g.atleta_genitore?.map(ag => ag.atleta?.cognome + ' ' + ag.atleta?.nome).join(', ') || '—') + '</td>' +
       '<td><button class="btn btn-sm btn-secondary" data-id="' + g.id + '" onclick="apriSchedaGenitore(this.getAttribute(\"data-id\"))">Apri</button></td>' +
       '</tr>';
   }).join('');
-}
-
-function apriSchedaGenitore(id, nome) {
-  // Mostra modal con i figli del genitore
-  toast('Scheda genitore: ' + nome, 'success');
 }
 
 // ============================================================
@@ -2106,9 +2101,8 @@ document.addEventListener('click', e => {
 
 
 
-function apriSchedaGenitore(id, nome) {
-  // Mostra modal con i figli del genitore
-  toast('Scheda genitore: ' + nome, 'success');
+function apriSchedaGenitore(id) {
+  apriModalGenitore(id);
 }
 
 // ============================================================
