@@ -1748,7 +1748,7 @@ document.getElementById('filter-pagamento-stato').addEventListener('change', loa
 document.getElementById('filter-doc-tipo').addEventListener('change', loadDocumenti);
 
 // Bottoni nuovi record (placeholder)
-['btn-nuovo-genitore','btn-nuovo-gruppo','btn-nuova-iscrizione',
+['btn-nuovo-gruppo','btn-nuova-iscrizione',
  'btn-nuovo-pagamento','btn-nuovo-documento','btn-nuova-tariffa'].forEach(id => {
   document.getElementById(id)?.addEventListener('click', () => toast('Funzione in sviluppo', 'warning'));
 });
@@ -4075,6 +4075,119 @@ function copiaCredSeg() {
 }
 
 
+
+// ============================================================
+// GESTIONE GENITORI
+// ============================================================
+let editGenitoreId = null;
+
+async function apriModalGenitore(id = null) {
+  editGenitoreId = id;
+  document.getElementById('modal-genitore-title').textContent = id ? 'Modifica genitore' : 'Nuovo genitore';
+
+  // Reset campi
+  ['gen-cognome','gen-nome','gen-cf','gen-telefono','gen-email','gen-indirizzo','gen-comune','gen-provincia'].forEach(f => {
+    const el = document.getElementById(f);
+    if (el) el.value = '';
+  });
+  document.getElementById('gen-relazione').value = 'genitore';
+  document.getElementById('gen-referente').checked = false;
+
+  // Popola select atleti
+  const sel = document.getElementById('gen-atleta');
+  sel.innerHTML = '';
+  const { data: atleti } = await sb.from('atleta').select('id, cognome, nome').order('cognome');
+  if (atleti) atleti.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id;
+    o.textContent = a.cognome + ' ' + a.nome;
+    sel.appendChild(o);
+  });
+
+  // Se modifica, carica dati esistenti
+  if (id) {
+    const { data: g } = await sb.from('genitore').select('*').eq('id', id).single();
+    if (g) {
+      document.getElementById('gen-cognome').value = g.cognome || '';
+      document.getElementById('gen-nome').value = g.nome || '';
+      document.getElementById('gen-cf').value = g.codice_fiscale || '';
+      document.getElementById('gen-telefono').value = g.telefono || '';
+      document.getElementById('gen-email').value = g.email || '';
+      document.getElementById('gen-indirizzo').value = g.indirizzo || '';
+      document.getElementById('gen-comune').value = g.comune || '';
+      document.getElementById('gen-provincia').value = g.provincia || '';
+    }
+    // Seleziona atleti già collegati
+    const { data: figli } = await sb.from('atleta_genitore').select('atleta_id, relazione, referente_principale').eq('genitore_id', id);
+    if (figli && figli.length > 0) {
+      document.getElementById('gen-relazione').value = figli[0].relazione || 'genitore';
+      document.getElementById('gen-referente').checked = figli[0].referente_principale || false;
+      Array.from(sel.options).forEach(o => {
+        if (figli.find(f => f.atleta_id === o.value)) o.selected = true;
+      });
+    }
+  }
+
+  apriModal('modal-genitore');
+}
+
+async function salvaGenitore() {
+  const cognome = document.getElementById('gen-cognome').value.trim().toUpperCase();
+  const nome = document.getElementById('gen-nome').value.trim().toUpperCase();
+  if (!cognome || !nome) { toast('Inserisci nome e cognome', 'error'); return; }
+
+  const btn = document.querySelector('#modal-genitore .btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio...';
+
+  try {
+    const dati = {
+      cognome, nome,
+      codice_fiscale: document.getElementById('gen-cf').value.trim().toUpperCase() || null,
+      telefono: document.getElementById('gen-telefono').value.trim() || null,
+      email: document.getElementById('gen-email').value.trim().toLowerCase() || null,
+      indirizzo: document.getElementById('gen-indirizzo').value.trim().toUpperCase() || null,
+      comune: document.getElementById('gen-comune').value.trim().toUpperCase() || null,
+      provincia: document.getElementById('gen-provincia').value.trim().toUpperCase() || null,
+    };
+
+    let genitoreId = editGenitoreId;
+    if (genitoreId) {
+      await sb.from('genitore').update(dati).eq('id', genitoreId);
+    } else {
+      const { data, error } = await sb.from('genitore').insert(dati).select('id').single();
+      if (error) throw new Error(error.message);
+      genitoreId = data.id;
+    }
+
+    // Aggiorna collegamenti atleti
+    await sb.from('atleta_genitore').delete().eq('genitore_id', genitoreId);
+    const sel = document.getElementById('gen-atleta');
+    const selezionati = Array.from(sel.selectedOptions).map(o => o.value);
+    const relazione = document.getElementById('gen-relazione').value;
+    const referente = document.getElementById('gen-referente').checked;
+
+    for (const atletaId of selezionati) {
+      await sb.from('atleta_genitore').insert({
+        genitore_id: genitoreId,
+        atleta_id: atletaId,
+        relazione,
+        referente_principale: referente,
+      });
+    }
+
+    toast('Genitore salvato!', 'success');
+    chiudiModal('modal-genitore');
+    loadGenitori();
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salva genitore';
+  }
+}
+
 // ============================================================
 // AREA GENITORE
 // ============================================================
@@ -4469,6 +4582,79 @@ function generaHtmlAttestazione(d) {
   <div class="firma-linea">Il Presidente / Responsabile<br><strong>${soc.nome || ''}</strong></div>
 </div>
 
+<!-- MODAL GENITORE -->
+<div class="modal-overlay" id="modal-genitore">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-genitore-title">Nuovo genitore</div>
+      <button class="modal-close" onclick="chiudiModal('modal-genitore')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <label>Cognome *</label>
+          <input type="text" id="gen-cognome" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Nome *</label>
+          <input type="text" id="gen-nome" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Codice Fiscale</label>
+          <input type="text" id="gen-cf" maxlength="16" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Telefono</label>
+          <input type="tel" id="gen-telefono">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Email</label>
+          <input type="email" id="gen-email">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Indirizzo</label>
+          <input type="text" id="gen-indirizzo" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Comune</label>
+          <input type="text" id="gen-comune" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Provincia</label>
+          <input type="text" id="gen-provincia" maxlength="2" style="text-transform:uppercase">
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Atleti collegati</div>
+      <div class="field">
+        <label>Seleziona atleta/i</label>
+        <select id="gen-atleta" multiple style="height:100px">
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Tieni premuto Ctrl per selezionare più atleti</div>
+      </div>
+      <div class="field">
+        <label>Relazione</label>
+        <select id="gen-relazione">
+          <option value="genitore">Genitore</option>
+          <option value="padre">Padre</option>
+          <option value="madre">Madre</option>
+          <option value="tutore">Tutore legale</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>
+          <input type="checkbox" id="gen-referente" style="width:auto;margin-right:6px;">
+          Referente principale
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-genitore')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaGenitore()">💾 Salva genitore</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`; // ###ATTESTAZIONE_TEMPLATE_END###
 }
@@ -4582,6 +4768,7 @@ initTema();
 // Collegamento bottone nuovo atleta
 document.getElementById('btn-nuovo-atleta')?.addEventListener('click', apriModalAtleta);
 document.getElementById('btn-nuovo-gruppo')?.addEventListener('click', apriModalGruppo);
+  document.getElementById('btn-nuovo-genitore')?.addEventListener('click', apriModalGenitore);
 document.getElementById('btn-nuovo-utente')?.addEventListener('click', apriModalNuovoUtente);
   document.getElementById('btn-nuova-segreteria')?.addEventListener('click', apriModalSegreteria);
 document.getElementById('btn-nuovo-documento')?.addEventListener('click', () => {
@@ -5429,6 +5616,79 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-segreteria')">Chiudi</button>
       <button class="btn btn-primary" id="btn-salva-seg" onclick="salvaSegreteria()">💾 Crea segreteria</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GENITORE -->
+<div class="modal-overlay" id="modal-genitore">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-genitore-title">Nuovo genitore</div>
+      <button class="modal-close" onclick="chiudiModal('modal-genitore')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <label>Cognome *</label>
+          <input type="text" id="gen-cognome" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Nome *</label>
+          <input type="text" id="gen-nome" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Codice Fiscale</label>
+          <input type="text" id="gen-cf" maxlength="16" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Telefono</label>
+          <input type="tel" id="gen-telefono">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Email</label>
+          <input type="email" id="gen-email">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Indirizzo</label>
+          <input type="text" id="gen-indirizzo" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Comune</label>
+          <input type="text" id="gen-comune" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Provincia</label>
+          <input type="text" id="gen-provincia" maxlength="2" style="text-transform:uppercase">
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Atleti collegati</div>
+      <div class="field">
+        <label>Seleziona atleta/i</label>
+        <select id="gen-atleta" multiple style="height:100px">
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Tieni premuto Ctrl per selezionare più atleti</div>
+      </div>
+      <div class="field">
+        <label>Relazione</label>
+        <select id="gen-relazione">
+          <option value="genitore">Genitore</option>
+          <option value="padre">Padre</option>
+          <option value="madre">Madre</option>
+          <option value="tutore">Tutore legale</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>
+          <input type="checkbox" id="gen-referente" style="width:auto;margin-right:6px;">
+          Referente principale
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-genitore')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaGenitore()">💾 Salva genitore</button>
     </div>
   </div>
 </div>
