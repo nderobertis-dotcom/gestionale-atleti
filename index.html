@@ -4153,14 +4153,15 @@ async function salvaGenitore() {
 
     let genitoreId = editGenitoreId;
     if (genitoreId) {
-      await sb.from('genitore').update(dati).eq('id', genitoreId);
+      const { error: updErr } = await sb.from('genitore').update(dati).eq('id', genitoreId);
+      if (updErr) throw new Error('Aggiornamento fallito: ' + updErr.message);
     } else {
       const { data, error } = await sb.from('genitore').insert(dati).select('id').single();
-      if (error) throw new Error(error.message);
+      if (error) throw new Error('Insert fallito: ' + error.message);
       genitoreId = data.id;
     }
 
-    // Aggiorna collegamenti atleti
+    // Aggiorna collegamenti atleti - solo se ce ne sono di selezionati
     await sb.from('atleta_genitore').delete().eq('genitore_id', genitoreId);
     const sel = document.getElementById('gen-atleta');
     const selezionati = Array.from(sel.selectedOptions).map(o => o.value);
@@ -4168,12 +4169,13 @@ async function salvaGenitore() {
     const referente = document.getElementById('gen-referente').checked;
 
     for (const atletaId of selezionati) {
-      await sb.from('atleta_genitore').insert({
+      const { error: agErr } = await sb.from('atleta_genitore').insert({
         genitore_id: genitoreId,
         atleta_id: atletaId,
         relazione,
         referente_principale: referente,
       });
+      if (agErr) throw new Error('Collegamento atleta fallito: ' + agErr.message);
     }
 
     toast('Genitore salvato!', 'success');
@@ -4181,6 +4183,7 @@ async function salvaGenitore() {
     loadGenitori();
 
   } catch(e) {
+    console.error('Errore salvaGenitore:', e);
     toast('Errore: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
