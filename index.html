@@ -1418,7 +1418,7 @@ async function loadGenitori() {
       '<td>' + (g.telefono || '—') + '</td>' +
       '<td>' + (g.email || '—') + '</td>' +
       '<td>' + (g.atleta_genitore?.map(ag => ag.atleta?.cognome + ' ' + ag.atleta?.nome).join(', ') || '—') + '</td>' +
-      '<td><button class="btn btn-sm btn-secondary" data-id="' + g.id + '" onclick="apriSchedaGenitore(this.getAttribute(\"data-id\"))">Apri</button></td>' +
+      '<td><button class="btn btn-sm btn-secondary" data-gid="' + g.id + '" onclick="apriSchedaGenitore(this.dataset.gid)">Apri</button></td>' +
       '</tr>';
   }).join('');
 }
