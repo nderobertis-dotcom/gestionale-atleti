@@ -706,6 +706,38 @@ tbody tr:last-child { border-bottom: none; }
           <button class="btn btn-secondary" id="btn-filter-atleti">Filtri</button>
           <button class="btn btn-primary" id="btn-nuovo-atleta">+ Nuovo atleta</button>
         </div>
+        <div id="panel-filter-atleti" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;display:none;">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:1;min-width:150px;">
+              <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);display:block;margin-bottom:6px;">Stato iscrizione</label>
+              <select id="filter-atleti-stato" onchange="loadAtleti()" style="width:100%">
+                <option value="">Tutti</option>
+                <option value="attiva">Attiva</option>
+                <option value="sospesa">Sospesa</option>
+                <option value="non_iscritto">Non iscritto</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:150px;">
+              <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);display:block;margin-bottom:6px;">Tipo atleta</label>
+              <select id="filter-atleti-tipo" onchange="loadAtleti()" style="width:100%">
+                <option value="">Tutti</option>
+                <option value="minorenne">Minorenne</option>
+                <option value="maggiorenne">Maggiorenne</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:150px;">
+              <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);display:block;margin-bottom:6px;">Certificato medico</label>
+              <select id="filter-atleti-cert" onchange="loadAtleti()" style="width:100%">
+                <option value="">Tutti</option>
+                <option value="valido">Valido</option>
+                <option value="scadenza">In scadenza (60 gg)</option>
+                <option value="scaduto">Scaduto</option>
+                <option value="assente">Non caricato</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary" onclick="resetFiltriAtleti()" style="flex-shrink:0">✕ Reset</button>
+          </div>
+        </div>
         <div class="card">
           <div class="table-wrap">
             <table>
@@ -1321,7 +1353,11 @@ async function loadDashboard() {
 // ATLETI
 // ============================================================
 async function loadAtleti() {
-  const search = document.getElementById('search-atleti')?.value || '';
+  const search       = document.getElementById('search-atleti')?.value || '';
+  const filtroStato  = document.getElementById('filter-atleti-stato')?.value || '';
+  const filtroTipo   = document.getElementById('filter-atleti-tipo')?.value || '';
+  const filtroCert   = document.getElementById('filter-atleti-cert')?.value || '';
+
   let { data, error } = await sb.from('atleta')
     .select('id, cognome, nome, data_nascita, maggiorenne, codice_fiscale, foto_url, iscrizione(stato, stagione_id, iscrizione_gruppo(gruppo(societa(nome)))), documento(tipo, data_scadenza)')
     .order('cognome');
@@ -1331,6 +1367,7 @@ async function loadAtleti() {
     return;
   }
 
+  // Ricerca testuale
   if (search) {
     const s = search.toLowerCase();
     data = data.filter(a =>
@@ -1338,6 +1375,39 @@ async function loadAtleti() {
       a.nome?.toLowerCase().includes(s) ||
       a.codice_fiscale?.toLowerCase().includes(s)
     );
+  }
+
+  // Filtro tipo (minorenne / maggiorenne)
+  if (filtroTipo) {
+    data = data.filter(a => {
+      const eta = a.data_nascita ? Math.floor((Date.now() - new Date(a.data_nascita)) / 31557600000) : 99;
+      return filtroTipo === 'minorenne' ? eta < 18 : eta >= 18;
+    });
+  }
+
+  // Filtro stato iscrizione
+  if (filtroStato) {
+    data = data.filter(a => {
+      const isc = a.iscrizione?.find(i => i.stagione_id === currentStagioneId) || a.iscrizione?.[0];
+      if (filtroStato === 'non_iscritto') return !isc;
+      return isc?.stato === filtroStato;
+    });
+  }
+
+  // Filtro certificato medico
+  if (filtroCert) {
+    const oggi = new Date();
+    data = data.filter(a => {
+      const cert = (a.documento || []).find(d => d.tipo === 'certificato_medico');
+      if (filtroCert === 'assente') return !cert || !cert.data_scadenza;
+      if (!cert?.data_scadenza) return false;
+      const scad = new Date(cert.data_scadenza + 'T00:00:00');
+      const giorni = Math.round((scad - oggi) / 86400000);
+      if (filtroCert === 'scaduto')   return giorni < 0;
+      if (filtroCert === 'scadenza')  return giorni >= 0 && giorni <= 60;
+      if (filtroCert === 'valido')    return giorni > 60;
+      return true;
+    });
   }
 
   const tbody = document.getElementById('tbody-atleti');
@@ -1395,6 +1465,14 @@ async function loadAtleti() {
   }).join('');
 }
 
+function resetFiltriAtleti() {
+  ['filter-atleti-stato','filter-atleti-tipo','filter-atleti-cert'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  loadAtleti();
+}
+
 async function apriAtleta(id) {
   const { data: a } = await sb.from('atleta').select('cognome, nome').eq('id', id).single();
   if (a) apriSchedaAtleta(id, a.cognome + ' ' + a.nome);
@@ -1439,14 +1517,28 @@ async function loadGruppi() {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👥</div><p>Nessun gruppo configurato. Creane uno con il bottone "+ Nuovo gruppo".</p></div></td></tr>';
     return;
   }
+
+  // Conteggio atleti per gruppo sulla stagione corrente
+  const conteggioMap = {};
+  if (currentStagioneId) {
+    const { data: ig } = await sb.from('iscrizione_gruppo')
+      .select('gruppo_id, iscrizione!inner(stagione_id)')
+      .eq('iscrizione.stagione_id', currentStagioneId);
+    if (ig) ig.forEach(r => {
+      conteggioMap[r.gruppo_id] = (conteggioMap[r.gruppo_id] || 0) + 1;
+    });
+  }
+
   tbody.innerHTML = data.map(g => {
-    const nAtleti = '—';
+    const nAtleti = conteggioMap[g.id] !== undefined
+      ? `<strong>${conteggioMap[g.id]}</strong>`
+      : '<span style="color:var(--text3)">—</span>';
     return `<tr>
       <td><strong>${g.nome}</strong>${g.note ? '<br><small style="color:var(--text3)">' + g.note + '</small>' : ''}</td>
       <td><span class="badge badge-gray">${g.tipo}</span></td>
       <td>${g.societa?.nome || '—'}</td>
       <td>${g.con_quota ? '<span class="badge badge-yellow">Sì</span>' : '<span class="badge badge-gray">No</span>'}</td>
-      <td><span style="color:var(--text3)">${nAtleti}</span></td>
+      <td>${nAtleti}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="apriModalAssegna('${g.id}')">+ Atleta</button>
       </td>
@@ -1739,12 +1831,17 @@ document.getElementById('menu-toggle').addEventListener('click', () => {
 // Filtri con debounce
 function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; }
 document.getElementById('search-atleti').addEventListener('input', debounce(loadAtleti, 300));
+document.getElementById('btn-filter-atleti').addEventListener('click', () => {
+  const panel = document.getElementById('panel-filter-atleti');
+  const visible = panel.style.display === 'block';
+  panel.style.display = visible ? 'none' : 'block';
+  document.getElementById('btn-filter-atleti').textContent = visible ? 'Filtri' : 'Filtri ▲';
+});
 document.getElementById('filter-pagamento-stato').addEventListener('change', loadPagamenti);
 document.getElementById('filter-doc-tipo').addEventListener('change', loadDocumenti);
 
 // Bottoni nuovi record (placeholder)
-['btn-nuovo-gruppo','btn-nuova-iscrizione',
- 'btn-nuovo-pagamento','btn-nuovo-documento','btn-nuova-tariffa'].forEach(id => {
+['btn-nuova-iscrizione','btn-nuovo-pagamento','btn-nuovo-documento'].forEach(id => {
   document.getElementById(id)?.addEventListener('click', () => toast('Funzione in sviluppo', 'warning'));
 });
 
