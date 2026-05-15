@@ -4214,7 +4214,7 @@ async function loadAreaGenitore() {
     }
 
     const { data: figli } = await sb.from('atleta_genitore')
-      .select('atleta(id, cognome, nome, data_nascita, codice_fiscale, foto_url)')
+      .select('atleta(id, cognome, nome, data_nascita, codice_fiscale, foto_url, telefono, email, comune, provincia)')
       .eq('genitore_id', genitoreId);
 
     if (!figli || figli.length === 0) {
@@ -4236,49 +4236,95 @@ async function loadAreaGenitore() {
 async function generaCardFiglio(atleta) {
   const oggi = new Date();
 
+  // ── Iscrizione con dati completi di società e gruppo ──────────────────────
   const { data: isc } = await sb.from('iscrizione')
-    .select('id, stato, stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo(nome, societa(nome)))')
+    .select(`id, stato, intestato_nome,
+      stagione(nome),
+      tariffa(nome),
+      iscrizione_gruppo(
+        gruppo(
+          id, nome, tipo,
+          societa(id, nome, tipo, telefono, email, indirizzo, comune, provincia, pec)
+        )
+      )`)
     .eq('atleta_id', atleta.id)
     .eq('stagione_id', currentStagioneId)
     .maybeSingle();
 
-  // PAGAMENTI
+  const societaObj  = isc?.iscrizione_gruppo?.[0]?.gruppo?.societa || null;
+  const societaId   = societaObj?.id || null;
+  const gruppoId    = isc?.iscrizione_gruppo?.[0]?.gruppo?.id || null;
+  const gruppoNome  = isc?.iscrizione_gruppo?.[0]?.gruppo?.nome || '';
+  const stagione    = isc?.stagione?.nome || '';
+
+  // ── Segreteria della società ───────────────────────────────────────────────
+  let segreteria = [];
+  if (societaId) {
+    const { data: segs } = await sb.from('segreteria_societa')
+      .select('profilo(nome, cognome, email)')
+      .eq('societa_id', societaId);
+    segreteria = (segs || []).map(s => s.profilo).filter(Boolean);
+  }
+
+  // ── Allenatori del gruppo (best effort — tabella potrebbe non esistere) ────
+  let allenatori = [];
+  if (gruppoId) {
+    try {
+      const { data: alls, error: allErr } = await sb.from('allenatore_gruppo')
+        .select('profilo(nome, cognome, email)')
+        .eq('gruppo_id', gruppoId);
+      if (!allErr) allenatori = (alls || []).map(a => a.profilo).filter(Boolean);
+    } catch(e) { /* tabella non ancora presente nel DB */ }
+  }
+
+  // ── PAGAMENTI ─────────────────────────────────────────────────────────────
   let pagHtml = '<p style="color:var(--text3);font-size:13px">Nessuna rata generata</p>';
   if (isc) {
     const { data: pags } = await sb.from('pagamento')
       .select('id, tipo, importo, data_scadenza, pagato, numero_ricevuta')
       .eq('iscrizione_id', isc.id).order('data_scadenza');
     if (pags && pags.length > 0) {
-      let totP = 0, totD = 0;
-      let rows = '';
+      let totP = 0, totD = 0, rows = '';
       for (const p of pags) {
         const scad = p.data_scadenza ? new Date(p.data_scadenza + 'T00:00:00') : null;
         const ritardo = scad && !p.pagato && scad < oggi;
         totD += parseFloat(p.importo) || 0;
         if (p.pagato) totP += parseFloat(p.importo) || 0;
-        const stato = p.pagato ? '<span class="badge badge-green">Pagato</span>'
-          : ritardo ? '<span class="badge badge-red">Scaduto</span>'
+        const stato = p.pagato
+          ? '<span class="badge badge-green">✓ Pagato</span>'
+          : ritardo ? '<span class="badge badge-red">⚠ Scaduto</span>'
           : '<span class="badge badge-yellow">In attesa</span>';
         const btnRic = p.pagato && p.numero_ricevuta
           ? '<button class="btn btn-sm btn-secondary" onclick="generaPdfRicevuta(\'' + p.id + '\')">Ricevuta</button>' : '';
-        const label = p.tipo === 'iscrizione' ? 'Quota iscrizione'
-          : 'Rata ' + (scad ? scad.toLocaleDateString('it-IT',{month:'long',year:'numeric'}) : '');
-        rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">'
+        const label = p.tipo === 'iscrizione'
+          ? 'Quota iscrizione'
+          : 'Rata ' + (scad ? scad.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) : '');
+        rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">'
           + '<div style="font-size:13px">' + label + '</div>'
           + '<div style="display:flex;align-items:center;gap:8px;">' + stato
-          + '<span style="font-family:var(--mono);font-size:13px;font-weight:600">EUR ' + parseFloat(p.importo).toFixed(2).replace('.',',') + '</span>'
+          + '<span style="font-family:var(--mono);font-size:13px;font-weight:600">€ ' + parseFloat(p.importo).toFixed(2).replace('.', ',') + '</span>'
           + btnRic + '</div></div>';
       }
-      pagHtml = rows + '<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:600;border-top:2px solid var(--border);font-size:13px;">'
+      const saldo = totD - totP;
+      pagHtml = rows
+        + '<div style="display:flex;justify-content:space-between;padding:10px 0;font-weight:600;border-top:2px solid var(--border);font-size:13px;">'
         + '<span>Totale pagato</span>'
-        + '<span style="font-family:var(--mono)">EUR ' + totP.toFixed(2).replace('.',',') + ' / EUR ' + totD.toFixed(2).replace('.',',') + '</span></div>';
+        + '<span style="font-family:var(--mono)">€ ' + totP.toFixed(2).replace('.', ',') + ' / € ' + totD.toFixed(2).replace('.', ',') + '</span></div>'
+        + (saldo > 0.005
+          ? '<div style="background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--danger);margin-top:6px;">Saldo residuo: <strong>€ ' + saldo.toFixed(2).replace('.', ',') + '</strong></div>'
+          : '');
     }
   }
 
-  // DOCUMENTI
+  // ── DOCUMENTI ─────────────────────────────────────────────────────────────
+  const docNomi = {
+    carta_identita: 'Carta d\'identità', passaporto: 'Passaporto',
+    patente: 'Patente', certificato_medico: 'Certificato medico',
+    istanza_visita: 'Istanza visita medica', altro: 'Altro documento'
+  };
   const { data: docs } = await sb.from('documento')
-    .select('id, tipo, data_scadenza, data_emissione, file_path').eq('atleta_id', atleta.id);
-  const iconsDoc = { carta_identita: 'Carta Identita', passaporto: 'Passaporto', patente: 'Patente', certificato_medico: 'Certificato medico', istanza_visita: 'Istanza visita', altro: 'Documento' };
+    .select('id, tipo, data_scadenza, data_emissione, file_path')
+    .eq('atleta_id', atleta.id);
   let docsHtml = '';
   if (docs && docs.length > 0) {
     for (const d of docs) {
@@ -4286,44 +4332,116 @@ async function generaCardFiglio(atleta) {
       const giorni = scad ? Math.round((scad - oggi) / 86400000) : null;
       let badge = '';
       if (scad) {
-        if (giorni < 0) badge = '<span class="badge badge-red">Scaduto</span>';
+        if (giorni < 0)        badge = '<span class="badge badge-red">Scaduto</span>';
         else if (giorni <= 30) badge = '<span class="badge badge-red">' + giorni + ' gg</span>';
         else if (giorni <= 60) badge = '<span class="badge badge-yellow">' + giorni + ' gg</span>';
-        else badge = '<span class="badge badge-green">Valido</span>';
+        else                   badge = '<span class="badge badge-green">Valido</span>';
       }
-      const btnS = d.file_path ? '<button class="btn btn-sm btn-secondary" onclick="scaricaDocumentoById(\'' + d.id + '\',\'' + d.file_path + '\')">Scarica</button>' : '';
-      docsHtml += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">'
-        + '<div style="flex:1;font-size:13px">' + (iconsDoc[d.tipo] || d.tipo) + '</div>'
-        + badge + btnS + '</div>';
+      const descData = scad
+        ? 'Scade: ' + scad.toLocaleDateString('it-IT')
+        : d.data_emissione ? 'Emesso: ' + new Date(d.data_emissione + 'T00:00:00').toLocaleDateString('it-IT') : '';
+      const btnS = d.file_path
+        ? '<button class="btn btn-sm btn-secondary" onclick="scaricaDocumentoById(\'' + d.id + '\',\'' + d.file_path + '\')">⬇ Scarica</button>'
+        : '';
+      docsHtml += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:13px;font-weight:500">' + (docNomi[d.tipo] || d.tipo) + '</div>'
+        + (descData ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + descData + '</div>' : '')
+        + '</div>'
+        + (badge ? badge + ' ' : '') + btnS + '</div>';
     }
   } else {
-    docsHtml = '<p style="color:var(--text3);font-size:13px">Nessun documento caricato</p>';
+    docsHtml = '<p style="color:var(--text3);font-size:13px">Nessun documento caricato. Contatta la segreteria.</p>';
   }
-  docsHtml += '<button class="btn btn-secondary" style="margin-top:10px;width:100%" onclick="apriModalDocumento(\'' + atleta.id + '\',\'' + atleta.cognome + ' ' + atleta.nome + '\')">+ Carica / aggiorna documenti</button>';
 
-  const avatarStyle = atleta.foto_url ? 'background-image:url(' + atleta.foto_url + ');background-size:cover;background-position:center;' : 'background:var(--accent);';
+  // ── Helper UI ──────────────────────────────────────────────────────────────
+  const infoRiga = (label, val) => !val ? '' :
+    '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">'
+    + '<span style="min-width:130px;flex-shrink:0;color:var(--text3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;padding-top:2px">' + label + '</span>'
+    + '<span style="flex:1">' + val + '</span></div>';
+
+  const sezione = (titolo, contenuto) =>
+    '<div style="margin-bottom:24px;">'
+    + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding-bottom:8px;margin-bottom:2px;border-bottom:2px solid var(--border);">' + titolo + '</div>'
+    + contenuto + '</div>';
+
+  // ── Età e avatar ──────────────────────────────────────────────────────────
+  const eta = atleta.data_nascita
+    ? Math.floor((Date.now() - new Date(atleta.data_nascita)) / 31557600000)
+    : null;
+  const dataNascitaFmt = atleta.data_nascita
+    ? new Date(atleta.data_nascita + 'T00:00:00').toLocaleDateString('it-IT') : null;
+  const avatarStyle = atleta.foto_url
+    ? 'background-image:url(' + atleta.foto_url + ');background-size:cover;background-position:center;'
+    : 'background:var(--accent);';
   const avatarContent = atleta.foto_url ? '' : (atleta.cognome || '?').charAt(0).toUpperCase();
-  const societa = isc?.iscrizione_gruppo?.[0]?.gruppo?.societa?.nome || '';
-  const gruppo = isc?.iscrizione_gruppo?.[0]?.gruppo?.nome || '';
-  const stagione = isc?.stagione?.nome || '';
 
-  return '<div class="card" style="margin-bottom:24px">'
-    + '<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);">'
-    + '<div style="width:52px;height:52px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;' + avatarStyle + '">' + avatarContent + '</div>'
-    + '<div style="flex:1"><div style="font-family:var(--syne);font-size:18px;font-weight:700">' + atleta.cognome + ' ' + atleta.nome + '</div>'
-    + '<div style="font-size:12px;color:var(--text3)">' + (atleta.codice_fiscale || '') + '</div></div>'
-    + (isc ? '<span class="badge badge-' + (isc.stato === 'attiva' ? 'green' : 'yellow') + '">' + (isc.stato || '') + '</span>' : '<span class="badge badge-gray">Non iscritto</span>')
-    + '</div>'
-    + (isc ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">'
-      + (societa ? '<span class="badge badge-gray">' + societa + '</span>' : '')
-      + (gruppo ? '<span class="badge badge-gray">' + gruppo + '</span>' : '')
-      + (stagione ? '<span class="badge badge-gray">' + stagione + '</span>' : '')
-      + '</div>' : '')
-    + '<div style="margin-bottom:20px;">'
-    + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:10px;">Pagamenti</div>'
-    + pagHtml + '</div>'
-    + '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:10px;">Documenti</div>'
-    + docsHtml + '</div>'
+  // ── Contatti staff ─────────────────────────────────────────────────────────
+  const contactBox = (ico, titolo, linee) =>
+    '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;">'
+    + '<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;">' + ico + ' ' + titolo + '</div>'
+    + linee.filter(Boolean).join('') + '</div>';
+
+  const linkTel  = (n) => n ? '<div style="font-size:13px">📞 <a href="tel:' + n + '" style="color:var(--accent)">' + n + '</a></div>' : '';
+  const linkMail = (e) => e ? '<div style="font-size:13px">✉️ <a href="mailto:' + e + '" style="color:var(--accent)">' + e + '</a></div>' : '';
+
+  let staffHtml = '';
+  if (societaObj && (societaObj.telefono || societaObj.email)) {
+    staffHtml += contactBox('🏢', societaObj.nome || 'Società', [linkTel(societaObj.telefono), linkMail(societaObj.email)]);
+  }
+  segreteria.forEach(s => {
+    staffHtml += contactBox('📋', 'Segreteria — ' + s.cognome + ' ' + s.nome, [linkMail(s.email)]);
+  });
+  allenatori.forEach(a => {
+    staffHtml += contactBox('🏃', 'Allenatore — ' + a.cognome + ' ' + a.nome, [linkMail(a.email)]);
+  });
+  if (!staffHtml) {
+    staffHtml = '<p style="color:var(--text3);font-size:13px">Nessun contatto disponibile — rivolgiti alla segreteria.</p>';
+  }
+
+  // ── Composizione card ──────────────────────────────────────────────────────
+  return '<div class="card" style="margin-bottom:24px;">'
+
+    // Header
+    + '<div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border);">'
+    + '<div style="width:56px;height:56px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;' + avatarStyle + '">' + avatarContent + '</div>'
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="font-size:19px;font-weight:700;margin-bottom:5px;">' + atleta.cognome + ' ' + atleta.nome + '</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+    + (eta !== null ? '<span class="badge badge-gray">' + eta + ' anni</span>' : '')
+    + (isc ? '<span class="badge badge-' + (isc.stato === 'attiva' ? 'green' : 'yellow') + '">' + isc.stato + '</span>' : '<span class="badge badge-gray">Non iscritto</span>')
+    + (stagione ? '<span class="badge badge-gray">' + stagione + '</span>' : '')
+    + '</div></div></div>'
+
+    // Anagrafica
+    + sezione('Dati anagrafici',
+        infoRiga('Data di nascita', dataNascitaFmt ? dataNascitaFmt + (eta !== null ? ' &nbsp;<span style="color:var(--text3)">(' + eta + ' anni)</span>' : '') : null)
+      + infoRiga('Codice fiscale', atleta.codice_fiscale ? '<span style="font-family:var(--mono)">' + atleta.codice_fiscale + '</span>' : null)
+      + infoRiga('Comune', atleta.comune ? atleta.comune + (atleta.provincia ? ' (' + atleta.provincia + ')' : '') : null)
+      + infoRiga('Telefono', atleta.telefono ? '<a href="tel:' + atleta.telefono + '" style="color:var(--accent)">' + atleta.telefono + '</a>' : null)
+      + infoRiga('Email', atleta.email ? '<a href="mailto:' + atleta.email + '" style="color:var(--accent)">' + atleta.email + '</a>' : null)
+      || '<p style="color:var(--text3);font-size:13px;padding:6px 0">Dati non ancora inseriti</p>'
+    )
+
+    // Iscrizione
+    + sezione('Iscrizione e appartenenza',
+        infoRiga('Stagione', stagione)
+      + infoRiga('Società', societaObj ? societaObj.nome : null)
+      + infoRiga('Gruppo / Squadra', gruppoNome)
+      + infoRiga('Tariffa', isc?.tariffa?.nome || null)
+      + infoRiga('Intestato a', isc?.intestato_nome || null)
+      || '<p style="color:var(--text3);font-size:13px;padding:6px 0">Nessuna iscrizione per la stagione corrente</p>'
+    )
+
+    // Staff
+    + sezione('Contatti staff', staffHtml)
+
+    // Pagamenti
+    + sezione('Pagamenti stagione', pagHtml)
+
+    // Documenti
+    + sezione('Documenti', docsHtml)
+
     + '</div>';
 }
 
