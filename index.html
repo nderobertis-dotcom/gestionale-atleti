@@ -886,7 +886,16 @@ tbody tr:last-child { border-bottom: none; }
         </div>
       </div>
 
-            <!-- ONBOARDING NUOVA SOCIETA -->
+            <!-- AREA GENITORE -->
+      <div class="section" id="section-area-genitore">
+        <div class="page-title">I miei figli</div>
+        <div class="page-sub">Riepilogo iscrizioni, pagamenti e documenti</div>
+        <div id="genitore-figli-container">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ONBOARDING NUOVA SOCIETA -->
       <div class="section" id="section-onboarding">
         <div class="page-title">Nuova società</div>
         <div class="page-sub">Procedura guidata per attivare una nuova società cliente</div>
@@ -1230,7 +1239,8 @@ async function loadSection(section) {
     case 'utenti':     loadUtenti(); break;
     case 'profilo':    loadProfilo(); break;
     case 'societa':    loadSocietaList(); break;
-    case 'onboarding': initOnboarding(); break;
+    case 'onboarding':    initOnboarding(); break;
+    case 'area-genitore': loadAreaGenitore(); break;
   }
 }
 
