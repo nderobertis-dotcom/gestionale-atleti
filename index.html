@@ -887,14 +887,7 @@ tbody tr:last-child { border-bottom: none; }
       </div>
 
             <!-- AREA GENITORE -->
-      <div class="section" id="section-area-genitore">
-        <div class="page-title">I miei figli</div>
-        <div class="page-sub">Riepilogo iscrizioni, pagamenti e documenti</div>
-        <div id="genitore-figli-container">
-          <div class="loading"><div class="spinner"></div></div>
-        </div>
-      </div>
-
+      
       <!-- AREA GENITORE -->
       <div class="section" id="section-area-genitore">
         <div class="page-title">I miei figli</div>
@@ -1137,11 +1130,8 @@ const MENU = {
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
   ],
   genitore: [
-    { section: 'dashboard', icon: '◉', label: 'Dashboard' },
-    { section: 'atleti',    icon: '👤', label: 'I miei figli' },
-    { section: 'pagamenti', icon: '💳', label: 'Pagamenti' },
-    { section: 'documenti', icon: '📄', label: 'Documenti' },
-    { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
+    { section: 'area-genitore', icon: '👨‍👩‍👧', label: 'I miei figli' },
+    { section: 'profilo',       icon: '⚙️',     label: 'Profilo' },
   ],
 };
 
@@ -1418,14 +1408,22 @@ async function loadGenitori() {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👨‍👩‍👧</div><p>Nessun genitore registrato</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = data.map(g => `<tr>
-    <td><strong>${g.cognome} ${g.nome}</strong></td>
-    <td style="font-family:var(--mono)">${g.codice_fiscale || '—'}</td>
-    <td>${g.telefono || '—'}</td>
-    <td>${g.email || '—'}</td>
-    <td>—</td>
-    <td><button class="btn btn-sm btn-secondary">Apri</button></td>
-  </tr>`).join('');
+  tbody.innerHTML = data.map(g => {
+    // Conta figli
+    return '<tr>' +
+      '<td><strong>' + g.cognome + ' ' + g.nome + '</strong></td>' +
+      '<td style="font-family:var(--mono)">' + (g.codice_fiscale || '—') + '</td>' +
+      '<td>' + (g.telefono || '—') + '</td>' +
+      '<td>' + (g.email || '—') + '</td>' +
+      '<td>—</td>' +
+      '<td><button class="btn btn-sm btn-secondary" data-id="' + g.id + '" onclick="apriSchedaGenitore(this.getAttribute(\"data-id\"))">Apri</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function apriSchedaGenitore(id, nome) {
+  // Mostra modal con i figli del genitore
+  toast('Scheda genitore: ' + nome, 'success');
 }
 
 // ============================================================
@@ -1714,7 +1712,11 @@ async function initApp(user) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
 
-  navigateTo('dashboard');
+  if (currentProfilo?.ruolo === 'genitore') {
+    navigateTo('area-genitore');
+  } else {
+    navigateTo('dashboard');
+  }
 }
 
 async function logout() {
@@ -2101,6 +2103,11 @@ document.addEventListener('click', e => {
 });
 
 
+
+function apriSchedaGenitore(id, nome) {
+  // Mostra modal con i figli del genitore
+  toast('Scheda genitore: ' + nome, 'success');
+}
 
 // ============================================================
 // GRUPPI / SQUADRE
