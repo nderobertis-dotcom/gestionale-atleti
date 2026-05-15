@@ -3858,7 +3858,7 @@ async function salvaUtente() {
   if (!cognome) { toast('Inserisci il cognome', 'error'); return; }
   if (!email) { toast('Inserisci l email', 'error'); return; }
   if (!password || password.length < 8) { toast('Password minimo 8 caratteri', 'error'); return; }
-  if (ruolo !== 'amministratore' && !societaId) { toast('Seleziona una società', 'error'); return; }
+  if (ruolo !== 'amministratore' && ruolo !== 'genitore' && !societaId) { toast('Seleziona una società', 'error'); return; }
 
   const btn = document.getElementById('btn-salva-utente');
   btn.disabled = true;
