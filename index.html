@@ -1350,6 +1350,13 @@ async function loadStagioni() {
   }).join('');
 }
 
+
+function aggiornaNomeStagione() {
+  const i = document.getElementById('stag-inizio').value;
+  const f = document.getElementById('stag-fine').value;
+  document.getElementById('stag-nome').value = i ? (f ? i + '/' + f : i) : '';
+}
+
 async function apriModalStagione(id = null) {
   editStagioneId = id;
   document.getElementById('stag-modal-title').textContent = id ? 'Modifica stagione' : 'Nuova stagione';
@@ -1361,30 +1368,31 @@ async function apriModalStagione(id = null) {
   if (id) {
     const { data: s } = await sb.from('stagione').select('*').eq('id', id).single();
     if (s) {
-      document.getElementById('stag-nome').value = s.nome || '';
       document.getElementById('stag-inizio').value = s.anno_inizio || '';
       document.getElementById('stag-fine').value = s.anno_fine || '';
+      aggiornaNomeStagione();
       document.getElementById('stag-note').value = s.note || '';
     }
   } else {
     // Suggerisci nome automatico
     const now = new Date();
     const y = now.getFullYear();
-    document.getElementById('stag-nome').value = y + '/' + (y + 1);
     document.getElementById('stag-inizio').value = String(y);
     document.getElementById('stag-fine').value = String(y + 1);
+    aggiornaNomeStagione();
   }
   apriModal('modal-stagione');
 }
 
 async function salvaStagione() {
-  const nome = document.getElementById('stag-nome').value.trim();
-  if (!nome) { toast('Inserisci il nome della stagione', 'error'); return; }
+  // nome viene calcolato automaticamente da anno_inizio/anno_fine
 
   const annoInizio = parseInt(document.getElementById('stag-inizio').value) || null;
   const annoFine   = parseInt(document.getElementById('stag-fine').value) || null;
+  if (!annoInizio) { toast('Inserisci l\'anno di inizio', 'error'); return; }
+  const nomeCalcolato = annoInizio + (annoFine ? '/' + annoFine : '');
   const payload = {
-    nome,
+    nome: nomeCalcolato,
     anno_inizio: annoInizio,
     anno_fine:   annoFine,
     note:        document.getElementById('stag-note').value.trim() || null,
@@ -6330,19 +6338,19 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       <button class="modal-close" onclick="chiudiModal('modal-stagione')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="field">
-        <label>Nome stagione *</label>
-        <input type="text" id="stag-nome" placeholder="ES. 2026/2027" style="text-transform:uppercase">
-      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
-          <label>Anno inizio</label>
-          <input type="number" id="stag-inizio" placeholder="2026" min="2000" max="2100">
+          <label>Anno inizio *</label>
+          <input type="number" id="stag-inizio" placeholder="2026" min="2000" max="2100" oninput="aggiornaNomeStagione()">
         </div>
         <div class="field">
           <label>Anno fine</label>
-          <input type="number" id="stag-fine" placeholder="2027" min="2000" max="2100">
+          <input type="number" id="stag-fine" placeholder="2027" min="2000" max="2100" oninput="aggiornaNomeStagione()">
         </div>
+      </div>
+      <div class="field">
+        <label>Nome stagione (generato automaticamente)</label>
+        <input type="text" id="stag-nome" disabled style="background:var(--bg3);color:var(--text2);font-family:var(--mono);" placeholder="Es. 2026/2027">
       </div>
       <div class="field">
         <label>Note</label>
