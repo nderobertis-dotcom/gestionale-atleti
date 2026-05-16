@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.0</span>
+      <span class="release-badge" title="Versione attuale">v2.1</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -878,6 +878,13 @@ tbody tr:last-child { border-bottom: none; }
       <div class="section" id="section-pagamenti">
         <div class="page-title">Pagamenti</div>
         <div class="page-sub">Registro pagamenti e rate</div>
+        <div class="card" id="card-bonifici-pendenti" style="margin-bottom:16px;display:none">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="card-title">🏦 Bonifici in attesa di verifica</div>
+            <button class="btn btn-sm btn-secondary" onclick="caricaBonificiPendenti()">↻</button>
+          </div>
+          <div id="bonifici-pendenti"><p style="color:var(--text3);font-size:13px;padding:8px">Nessun bonifico in attesa.</p></div>
+        </div>
         <div class="toolbar">
           <input type="text" class="search-input" id="search-pagamenti" placeholder="🔍  Cerca atleta o ricevuta...">
           <select class="btn btn-secondary" id="filter-pagamento-stato" style="padding:8px 12px">
@@ -1196,6 +1203,15 @@ tbody tr:last-child { border-bottom: none; }
         </div>
       </div>
 
+      <!-- AREA ATLETA -->
+      <div class="section" id="section-area-atleta">
+        <div class="page-title">La mia situazione</div>
+        <div class="page-sub">Iscrizione, pagamenti e documenti</div>
+        <div id="area-atleta-container">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
       <!-- PROFILO -->
       <div class="section" id="section-profilo">
         <div class="page-title">Il mio profilo</div>
@@ -1282,6 +1298,10 @@ const MENU = {
   genitore: [
     { section: 'area-genitore', icon: '👨‍👩‍👧', label: 'I miei figli' },
     { section: 'profilo',       icon: '⚙️',     label: 'Profilo' },
+  ],
+  atleta: [
+    { section: 'area-atleta', icon: '👤', label: 'La mia situazione' },
+    { section: 'profilo',     icon: '⚙️', label: 'Profilo' },
   ],
 };
 
@@ -1434,6 +1454,7 @@ async function loadSection(section) {
     case 'stagioni':    loadStagioni(); break;
     case 'onboarding':    initOnboarding(); break;
     case 'area-genitore': loadAreaGenitore(); break;
+    case 'area-atleta':    loadAreaAtleta(); break;
   }
 }
 
@@ -2402,6 +2423,162 @@ async function stampaSchedaAtleta() {
   setTimeout(() => { win.print(); }, 500);
 }
 
+
+// ============================================================
+// AREA ATLETA (maggiorenne)
+// ============================================================
+async function loadAreaAtleta() {
+  const container = document.getElementById('area-atleta-container');
+  if (!container) return;
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  // Trova l'atleta collegato al profilo corrente
+  const { data: pa } = await sb.from('profilo_atleta')
+    .select('atleta(id, cognome, nome, data_nascita, codice_fiscale, telefono, email, comune, provincia)')
+    .eq('profilo_id', currentUser.id).maybeSingle();
+
+  if (!pa?.atleta) {
+    container.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px">Nessun atleta collegato al tuo profilo. Contatta la segreteria.</p></div>';
+    return;
+  }
+
+  const atleta = pa.atleta;
+  const html = await generaCardFiglio(atleta);
+  container.innerHTML = html;
+}
+
+// ============================================================
+// MODAL BONIFICO — upload contabile
+// ============================================================
+function apriModalBonifico(btn) {
+  const pid   = btn.dataset.pid;
+  const label = btn.dataset.label;
+  const imp   = btn.dataset.imp;
+  document.getElementById('bon-pagamento-id').value = pid;
+  document.getElementById('bon-label').textContent   = label;
+  document.getElementById('bon-importo').textContent = '€ ' + parseFloat(imp).toFixed(2).replace('.', ',');
+  document.getElementById('bon-file').value          = '';
+  document.getElementById('bon-note').value          = '';
+  document.getElementById('bon-status').innerHTML    = '';
+  apriModal('modal-bonifico');
+}
+
+async function salvaContabileBonifico() {
+  const pid   = document.getElementById('bon-pagamento-id').value;
+  const file  = document.getElementById('bon-file').files[0];
+  const note  = document.getElementById('bon-note').value.trim();
+  const btn   = document.querySelector('#modal-bonifico .btn-primary');
+
+  if (!file) { toast('Seleziona il file della contabile', 'error'); return; }
+
+  btn.disabled = true; btn.textContent = 'Caricamento...';
+  document.getElementById('bon-status').innerHTML = '<p style="color:var(--text3);font-size:13px">Caricamento in corso...</p>';
+
+  try {
+    // Upload contabile su Supabase Storage
+    const ext    = file.name.split('.').pop();
+    const path   = 'bonifici/' + pid + '_' + Date.now() + '.' + ext;
+    const { error: upErr } = await sb.storage.from('contabili').upload(path, file, { upsert: true });
+    if (upErr) throw new Error('Upload fallito: ' + upErr.message);
+
+    // Aggiorna pagamento: contabile_url + richiesta_verifica
+    const { error: updErr } = await sb.from('pagamento').update({
+      contabile_url:      path,
+      richiesta_verifica: true,
+      data_richiesta:     new Date().toISOString(),
+      note:               (note ? 'Bonifico: ' + note : 'Contabile bonifico allegata'),
+    }).eq('id', pid);
+    if (updErr) throw new Error(updErr.message);
+
+    toast('Contabile inviata! La segreteria provvederà alla verifica.', 'success');
+    chiudiModal('modal-bonifico');
+
+    // Ricarica la vista
+    if (currentProfilo?.ruolo === 'genitore') loadAreaGenitore();
+    else if (currentProfilo?.ruolo === 'atleta') loadAreaAtleta();
+
+  } catch(e) {
+    document.getElementById('bon-status').innerHTML = '<p style="color:var(--danger);font-size:13px">Errore: ' + e.message + '</p>';
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '📤 Invia contabile';
+  }
+}
+
+// ============================================================
+// SEGRETERIA — bonifici in attesa di verifica
+// ============================================================
+async function caricaBonificiPendenti() {
+  const el = document.getElementById('bonifici-pendenti');
+  if (!el) return;
+
+  let query = sb.from('pagamento')
+    .select('id, importo, data_richiesta, note, contabile_url, iscrizione!inner(stagione_id, atleta(cognome, nome), intestato_nome, iscrizione_gruppo(gruppo(societa_id, societa(nome))))')
+    .eq('richiesta_verifica', true)
+    .eq('pagato', false)
+    .order('data_richiesta');
+  if (currentStagioneId) query = query.eq('iscrizione.stagione_id', currentStagioneId);
+
+  const { data } = await query;
+  if (!data || data.length === 0) {
+    el.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:8px">Nessun bonifico in attesa.</p>';
+    impostaBadge('pagamenti', 0);
+    return;
+  }
+
+  impostaBadge('pagamenti', data.length);
+
+  el.innerHTML = data.map(p => {
+    const atleta  = (p.iscrizione?.atleta?.cognome || '') + ' ' + (p.iscrizione?.atleta?.nome || '');
+    const societa = p.iscrizione?.iscrizione_gruppo?.[0]?.gruppo?.societa?.nome || '';
+    const dataRic = p.data_richiesta ? new Date(p.data_richiesta).toLocaleDateString('it-IT', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">'
+      + '<div style="flex:1;min-width:160px">'
+      + '<div style="font-weight:600;font-size:14px">' + atleta + '</div>'
+      + '<div style="font-size:12px;color:var(--text3)">' + (societa ? societa + ' &nbsp;·&nbsp; ' : '') + dataRic + '</div>'
+      + (p.note ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + p.note + '</div>' : '')
+      + '</div>'
+      + '<span style="font-family:var(--mono);font-weight:600">€ ' + parseFloat(p.importo).toFixed(2).replace('.', ',') + '</span>'
+      + (p.contabile_url ? '<button class="btn btn-sm btn-secondary" data-url="' + p.contabile_url + '" onclick="scaricaContabile(this.dataset.url)">📎 Contabile</button>' : '')
+      + '<button class="btn btn-sm btn-primary" data-pid="' + p.id + '" onclick="confermaBonifico(this.dataset.pid)">✓ Conferma incasso</button>'
+      + '<button class="btn btn-sm btn-danger" data-pid="' + p.id + '" onclick="rifiutaBonifico(this.dataset.pid)" title="Rifiuta">✕</button>'
+      + '</div>';
+  }).join('');
+}
+
+async function scaricaContabile(path) {
+  const { data } = await sb.storage.from('contabili').createSignedUrl(path, 60);
+  if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  else toast('Impossibile aprire il file', 'error');
+}
+
+async function confermaBonifico(pid) {
+  if (!confirm('Confermare l\'incasso del bonifico? Il pagamento verrà segnato come pagato.')) return;
+  const { error } = await sb.from('pagamento').update({
+    pagato: true,
+    pagato_il: new Date().toISOString().split('T')[0],
+    richiesta_verifica: false,
+    metodo: 'bonifico',
+  }).eq('id', pid);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Incasso confermato!', 'success');
+  caricaBonificiPendenti();
+  loadDashboard();
+}
+
+async function rifiutaBonifico(pid) {
+  if (!confirm('Rifiutare la richiesta? Il pagamento tornerà in attesa e il genitore/atleta potrà reinviare la contabile.')) return;
+  const { error } = await sb.from('pagamento').update({
+    richiesta_verifica: false,
+    contabile_url: null,
+    data_richiesta: null,
+    note: null,
+  }).eq('id', pid);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Richiesta annullata', 'success');
+  caricaBonificiPendenti();
+}
+
 // ============================================================
 // FUNZIONI ELIMINA
 // ============================================================
@@ -2852,6 +3029,13 @@ async function loadIscrizioni() {
 // PAGAMENTI
 // ============================================================
 async function loadPagamenti() {
+  // Mostra sezione bonifici pendenti per segreteria e admin
+  const cardBon = document.getElementById('card-bonifici-pendenti');
+  if (cardBon) {
+    const showBon = currentProfilo?.ruolo === 'segreteria' || currentProfilo?.ruolo === 'amministratore';
+    cardBon.style.display = showBon ? 'block' : 'none';
+    if (showBon) caricaBonificiPendenti();
+  }
   const filtro = document.getElementById('filter-pagamento-stato')?.value;
   const search = document.getElementById('search-pagamenti')?.value?.toLowerCase() || '';
   let query = sb.from('pagamento')
@@ -3023,7 +3207,7 @@ async function loadTariffe() {
 // ============================================================
 async function loadUtenti() {
   let { data } = await sb.from('profilo')
-    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(cognome, nome))')
+    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(cognome, nome)), profilo_atleta(atleta(cognome, nome))')
     .order('cognome');
   // Filtro per società: mostra solo utenti della società selezionata (eccetto admin)
   if (data && currentSocietaId) {
@@ -3043,6 +3227,9 @@ async function loadUtenti() {
     if (u.ruolo === 'genitore') {
       const g = u.profilo_genitore?.[0]?.genitore;
       infoCol = g ? g.cognome + ' ' + g.nome : '<span style="color:var(--danger);font-size:12px">⚠ Non collegato</span>';
+    } else if (u.ruolo === 'atleta') {
+      const a = u.profilo_atleta?.[0]?.atleta;
+      infoCol = a ? a.cognome + ' ' + a.nome : '<span style="color:var(--danger);font-size:12px">⚠ Non collegato</span>';
     } else if (u.ruolo === 'segreteria' || u.ruolo === 'allenatore') {
       const soc = u.segreteria_societa?.[0]?.societa?.nome;
       infoCol = soc || '—';
@@ -5375,10 +5562,12 @@ function aggiornaFormUtente() {
 
 function aggiornaFormModifica() {
   const ruolo = document.getElementById('mu-ruolo').value;
-  const isAdmin   = ruolo === 'amministratore';
+  const isAdmin    = ruolo === 'amministratore';
   const isGenitore = ruolo === 'genitore';
-  document.getElementById('mu-societa-field').style.display  = (isAdmin || isGenitore) ? 'none' : 'block';
-  document.getElementById('mu-genitore-field').style.display = isGenitore ? 'block' : 'none';
+  const isAtleta   = ruolo === 'atleta';
+  document.getElementById('mu-societa-field').style.display   = (isAdmin || isGenitore || isAtleta) ? 'none' : 'block';
+  document.getElementById('mu-genitore-field').style.display  = isGenitore ? 'block' : 'none';
+  document.getElementById('mu-atleta-field').style.display    = isAtleta   ? 'block' : 'none';
 }
 
 async function apriModalNuovoUtente() {
@@ -5528,6 +5717,19 @@ async function apriModalModificaUtente(id) {
   const { data: pg } = await sb.from('profilo_genitore').select('genitore_id').eq('profilo_id', id).maybeSingle();
   if (pg?.genitore_id) selG.value = pg.genitore_id;
 
+  // Popola atleti
+  const selA = document.getElementById('mu-atleta');
+  selA.innerHTML = '<option value="">— Seleziona atleta —</option>';
+  const { data: atleti } = await sb.from('atleta').select('id, cognome, nome').order('cognome');
+  if (atleti) atleti.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id; o.textContent = a.cognome + ' ' + a.nome;
+    selA.appendChild(o);
+  });
+  // Pre-seleziona atleta attuale
+  const { data: pa } = await sb.from('profilo_atleta').select('atleta_id').eq('profilo_id', id).maybeSingle();
+  if (pa?.atleta_id) selA.value = pa.atleta_id;
+
   aggiornaFormModifica();
   apriModal('modal-modifica-utente');
 }
@@ -5577,6 +5779,14 @@ async function salvaModificaUtente() {
     if (ruolo === 'genitore' && genitoreId) {
       const { error: pgErr } = await sb.from('profilo_genitore').insert({ profilo_id: editUtenteId, genitore_id: genitoreId });
       if (pgErr) throw new Error('Collegamento genitore fallito: ' + pgErr.message);
+    }
+
+    // Aggiorna collegamento atleta (per ruolo atleta maggiorenne)
+    const atletaId = document.getElementById('mu-atleta').value;
+    await sb.from('profilo_atleta').delete().eq('profilo_id', editUtenteId);
+    if (ruolo === 'atleta' && atletaId) {
+      const { error: paErr } = await sb.from('profilo_atleta').insert({ profilo_id: editUtenteId, atleta_id: atletaId });
+      if (paErr) throw new Error('Collegamento atleta fallito: ' + paErr.message);
     }
 
     toast('Utente aggiornato!', 'success');
@@ -5888,7 +6098,7 @@ async function generaCardFiglio(atleta) {
   let pagHtml = '<p style="color:var(--text3);font-size:13px">Nessuna rata generata</p>';
   if (isc) {
     const { data: pags } = await sb.from('pagamento')
-      .select('id, tipo, importo, data_scadenza, pagato, numero_ricevuta')
+      .select('id, tipo, importo, data_scadenza, pagato, numero_ricevuta, richiesta_verifica, note')
       .eq('iscrizione_id', isc.id).order('data_scadenza');
     if (pags && pags.length > 0) {
       let totP = 0, totD = 0, rows = '';
@@ -5906,11 +6116,26 @@ async function generaCardFiglio(atleta) {
         const label = p.tipo === 'iscrizione'
           ? 'Quota iscrizione'
           : 'Rata ' + (scad ? scad.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) : '');
-        rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">'
-          + '<div style="font-size:13px">' + label + '</div>'
-          + '<div style="display:flex;align-items:center;gap:8px;">' + stato
+
+        // Bottoni pagamento per rate non saldate
+        let btnPaga = '';
+        if (!p.pagato) {
+          if (p.richiesta_verifica) {
+            btnPaga = '<span class="badge badge-yellow" style="font-size:11px">⏳ Verifica in corso</span>';
+          } else {
+            const imp = parseFloat(p.importo).toFixed(2);
+            btnPaga = '<button class="btn btn-sm btn-secondary" data-pid="' + p.id + '" data-label="' + label.replace(/"/g,'') + '" data-imp="' + imp + '" onclick="apriModalBonifico(this)" title="Allega contabile bonifico">🏦 Bonifico</button>'
+              + '<button class="btn btn-sm btn-secondary" style="opacity:0.5;cursor:not-allowed" disabled title="Pagamento con carta — prossimamente">💳 Carta</button>';
+          }
+        }
+
+        rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap;">'
+          + '<div style="font-size:13px;flex:1">' + label
+          + (p.note ? '<div style="font-size:11px;color:var(--text3)">' + p.note + '</div>' : '')
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + stato
           + '<span style="font-family:var(--mono);font-size:13px;font-weight:600">€ ' + parseFloat(p.importo).toFixed(2).replace('.', ',') + '</span>'
-          + btnRic + '</div></div>';
+          + btnRic + btnPaga + '</div></div>';
       }
       const saldo = totD - totP;
       pagHtml = rows
@@ -5919,7 +6144,8 @@ async function generaCardFiglio(atleta) {
         + '<span style="font-family:var(--mono)">€ ' + totP.toFixed(2).replace('.', ',') + ' / € ' + totD.toFixed(2).replace('.', ',') + '</span></div>'
         + (saldo > 0.005
           ? '<div style="background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--danger);margin-top:6px;">Saldo residuo: <strong>€ ' + saldo.toFixed(2).replace('.', ',') + '</strong></div>'
-          : '');
+          : '')
+        + '<div style="background:var(--bg3);border-radius:var(--radius);padding:8px 12px;font-size:12px;color:var(--text3);margin-top:8px;">💵 Per pagamenti in <strong>contanti</strong> rivolgiti direttamente alla segreteria — non è richiesta nessuna azione da parte tua.</div>';
     }
   }
 
@@ -7187,6 +7413,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
           <option value="segreteria">Segreteria</option>
           <option value="allenatore">Allenatore</option>
           <option value="genitore">Genitore</option>
+          <option value="atleta">Atleta (maggiorenne)</option>
           <option value="amministratore">Amministratore</option>
         </select>
       </div>
@@ -7256,6 +7483,13 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
           <option value="">— Seleziona genitore —</option>
         </select>
         <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">Il genitore deve essere già registrato in anagrafica</small>
+      </div>
+      <div id="mu-atleta-field" class="field" style="display:none">
+        <label>Collega a atleta</label>
+        <select id="mu-atleta">
+          <option value="">— Seleziona atleta —</option>
+        </select>
+        <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">L'atleta deve essere già registrato in anagrafica</small>
       </div>
       <div class="field">
         <label>Stato account</label>
@@ -7595,6 +7829,41 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-nuova-iscrizione')">Annulla</button>
       <button class="btn btn-primary" id="btn-ni-step2" onclick="niStep2Avanti()" style="display:none">Avanti → Tariffa</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL BONIFICO -->
+<div class="modal-overlay" id="modal-bonifico">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">🏦 Allega contabile bonifico</div>
+      <button class="modal-close" onclick="chiudiModal('modal-bonifico')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="bon-pagamento-id">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600" id="bon-label">—</div>
+        <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);margin-top:4px" id="bon-importo">—</div>
+      </div>
+      <div class="field">
+        <label>File contabile (PDF, immagine) *</label>
+        <input type="file" id="bon-file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+        <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">Allega la ricevuta di bonifico rilasciata dalla tua banca</small>
+      </div>
+      <div class="field">
+        <label>Note (opzionale)</label>
+        <textarea id="bon-note" placeholder="Es. Bonifico del 15/05/2027..." style="min-height:60px"></textarea>
+      </div>
+      <div id="bon-status"></div>
+      <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.15);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);">
+        ℹ️ La contabile verrà inviata alla segreteria che provvederà a confermare l'incasso. Il saldo verrà aggiornato solo dopo la verifica.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-bonifico')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaContabileBonifico()">📤 Invia contabile</button>
     </div>
   </div>
 </div>
