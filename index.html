@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v1.6</span>
+      <span class="release-badge" title="Versione attuale">v1.7</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -769,7 +769,7 @@ tbody tr:last-child { border-bottom: none; }
                 </tr>
               </thead>
               <tbody id="tbody-atleti">
-                <tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>
+                <tr><td colspan="9"><div class="loading"><div class="spinner"></div></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -860,6 +860,8 @@ tbody tr:last-child { border-bottom: none; }
                   <th>Tariffa</th>
                   <th>Intestato a</th>
                   <th>Stato</th>
+                  <th>Società</th>
+                  <th>Gruppo</th>
                   <th>Data</th>
                   <th></th>
                 </tr>
@@ -1514,10 +1516,16 @@ async function exportAtletiCSV() {
 
   try {
     let query = sb.from('atleta')
-      .select('cognome, nome, data_nascita, codice_fiscale, comune, provincia, telefono, email, iscrizione(stato, stagione_id, iscrizione_gruppo(gruppo(nome, societa(nome))))')
+      .select('cognome, nome, data_nascita, codice_fiscale, comune, provincia, telefono, email, iscrizione(stato, stagione_id, iscrizione_gruppo(gruppo(societa_id, nome, societa(nome))))')
       .order('cognome');
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+    if (data && currentSocietaId) {
+      data = data.filter(a => {
+        const isc = (a.iscrizione || []).find(i => i.stagione_id === currentStagioneId) || (a.iscrizione || [])[0];
+        return (isc?.iscrizione_gruppo || []).some(ig => ig.gruppo?.societa_id === currentSocietaId);
+      });
+    }
     if (error) throw new Error(error.message);
 
     const righe = [
@@ -1697,6 +1705,110 @@ async function loadRiepilogoFinanziario() {
   } catch(e) {
     el.innerHTML = '<p style="color:var(--danger);font-size:13px;padding:12px">Errore: ' + e.message + '</p>';
   }
+}
+
+
+// ============================================================
+// STAMPA SCHEDA ATLETA PDF
+// ============================================================
+async function stampaSchedaAtleta() {
+  const id = schedaAtletaId;
+  if (!id) return;
+
+  toast('Preparazione PDF...', 'info');
+
+  // Carica tutti i dati necessari
+  const [{ data: a }, { data: isc }, { data: docs }, { data: pags }] = await Promise.all([
+    sb.from('atleta').select('*').eq('id', id).single(),
+    sb.from('iscrizione').select('stato, stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo(nome, societa(nome, telefono, email)))')
+      .eq('atleta_id', id).eq('stagione_id', currentStagioneId).maybeSingle(),
+    sb.from('documento').select('tipo, data_scadenza, data_emissione').eq('atleta_id', id),
+    sb.from('pagamento').select('tipo, importo, data_scadenza, pagato, numero_ricevuta')
+      .eq('iscrizione_id', isc?.id || '00000000-0000-0000-0000-000000000000').order('data_scadenza'),
+  ]);
+
+  if (!a) { toast('Dati atleta non trovati', 'error'); return; }
+
+  const eta = a.data_nascita ? Math.floor((Date.now() - new Date(a.data_nascita)) / 31557600000) : null;
+  const societa = isc?.iscrizione_gruppo?.[0]?.gruppo?.societa;
+  const gruppo  = isc?.iscrizione_gruppo?.[0]?.gruppo;
+  const stagione = isc?.stagione?.nome || currentStagioneNome || '—';
+
+  const docNomi = { carta_identita: 'Carta identit\u00e0', passaporto: 'Passaporto', patente: 'Patente',
+    certificato_medico: 'Certificato medico', istanza_visita: 'Istanza visita', altro: 'Altro' };
+
+  const fmtD = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('it-IT') : '—';
+  const row  = (l, v) => v ? `<tr><td style="color:#666;font-size:11px;padding:4px 8px;width:140px">${l}</td><td style="padding:4px 8px;font-size:13px">${v}</td></tr>` : '';
+
+  const docsHtml = (docs || []).map(d => {
+    const scad = d.data_scadenza ? new Date(d.data_scadenza+'T00:00:00') : null;
+    const giorni = scad ? Math.round((scad-new Date())/86400000) : null;
+    const stato = !scad ? '' : giorni < 0 ? '⚠ Scaduto' : giorni <= 60 ? `⚠ ${giorni}gg` : '✓ Valido';
+    return `<tr><td style="padding:4px 8px;font-size:13px">${docNomi[d.tipo]||d.tipo}</td>
+      <td style="padding:4px 8px;font-size:13px">${fmtD(d.data_scadenza)}</td>
+      <td style="padding:4px 8px;font-size:12px;color:${giorni<0?'#c00':giorni<=60?'#c70':'#090'}">${stato}</td></tr>`;
+  }).join('') || '<tr><td colspan="3" style="padding:8px;color:#999;font-size:13px">Nessun documento</td></tr>';
+
+  let totD=0, totP=0;
+  const pagsHtml = (pags||[]).map(p => {
+    const imp = parseFloat(p.importo)||0;
+    totD += imp; if(p.pagato) totP += imp;
+    return `<tr><td style="padding:4px 8px;font-size:13px">${p.tipo==='iscrizione'?'Quota iscrizione':'Rata '+fmtD(p.data_scadenza)}</td>
+      <td style="padding:4px 8px;font-family:monospace;font-size:13px">€ ${imp.toFixed(2).replace('.',',')}</td>
+      <td style="padding:4px 8px;font-size:12px;color:${p.pagato?'#090':'#c00'}">${p.pagato?'✓ Pagato':'In attesa'}</td></tr>`;
+  }).join('') || '<tr><td colspan="3" style="padding:8px;color:#999;font-size:13px">Nessuna rata</td></tr>';
+
+  const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+  <title>Scheda atleta — ${a.cognome} ${a.nome}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #111; font-size: 13px; }
+    h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 13px; font-weight: 600; margin: 16px 0 6px; border-bottom: 2px solid #1a6eff; padding-bottom: 4px; color: #1a6eff; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    tr:nth-child(even) { background: #f7f7f7; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 16px; }
+    .footer { margin-top: 32px; font-size: 11px; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
+    @media print { body { margin: 0; } }
+  </style></head><body>
+  <div class="header">
+    <div>
+      <h1>${a.cognome} ${a.nome}</h1>
+      <div style="color:#666;font-size:12px">${eta!==null?eta+' anni — ':''}${a.data_nascita?fmtD(a.data_nascita):''}</div>
+      ${societa?`<div style="font-size:12px;margin-top:4px">🏢 ${societa.nome}${gruppo?' &middot; '+gruppo.nome:''}</div>`:''}
+    </div>
+    <div style="text-align:right;font-size:11px;color:#666">
+      <div>tesserato.club</div>
+      <div>Stagione ${stagione}</div>
+      <div>${new Date().toLocaleDateString('it-IT')}</div>
+    </div>
+  </div>
+  <h2>Dati anagrafici</h2>
+  <table>${row('Codice fiscale', a.codice_fiscale ? `<span style="font-family:monospace">${a.codice_fiscale}</span>` : null)}
+    ${row('Comune', a.comune ? a.comune+(a.provincia?` (${a.provincia})`:'') : null)}
+    ${row('Telefono', a.telefono)} ${row('Email', a.email)}
+    ${row('Indirizzo', a.indirizzo)} ${row('Comune nascita', a.comune_nascita)}
+  </table>
+  <h2>Iscrizione ${stagione}</h2>
+  <table>${row('Stato', isc?.stato)} ${row('Tariffa', isc?.tariffa?.nome)}
+    ${row('Società', societa?.nome)} ${row('Gruppo', gruppo?.nome)}
+  </table>
+  <h2>Documenti</h2>
+  <table><thead><tr><th style="text-align:left;padding:4px 8px;font-size:11px;color:#666">Tipo</th><th style="text-align:left;padding:4px 8px;font-size:11px;color:#666">Scadenza</th><th style="text-align:left;padding:4px 8px;font-size:11px;color:#666">Stato</th></tr></thead>
+  <tbody>${docsHtml}</tbody></table>
+  <h2>Pagamenti</h2>
+  <table><thead><tr><th style="text-align:left;padding:4px 8px;font-size:11px;color:#666">Rata</th><th style="text-align:left;padding:4px 8px;font-size:11px;color:#666">Importo</th><th style="text-align:left;padding:4px 8px;font-size:11px;color:#666">Stato</th></tr></thead>
+  <tbody>${pagsHtml}
+  <tr style="font-weight:700;border-top:2px solid #ddd"><td style="padding:6px 8px">Totale</td>
+    <td style="padding:6px 8px;font-family:monospace">€ ${totP.toFixed(2).replace('.',',')} / € ${totD.toFixed(2).replace('.',',')}</td>
+    <td style="padding:6px 8px;font-size:12px;color:${totD-totP>0.01?'#c00':'#090'}">${totD-totP>0.01?'Residuo € '+(totD-totP).toFixed(2).replace('.',','):'Saldato ✓'}</td></tr>
+  </tbody></table>
+  <div class="footer">Documento generato da tesserato.club — ${new Date().toLocaleString('it-IT')}</div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 500);
 }
 
 // ============================================================
@@ -2104,7 +2216,7 @@ async function loadIscrizioni() {
   const filtroStato  = document.getElementById('filter-iscrizioni-stato')?.value || '';
 
   let query = sb.from('iscrizione')
-    .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo_id, gruppo(nome, societa_id))')
+    .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo_id, gruppo(nome, societa_id, societa(nome)))')
     .order('data_iscrizione', { ascending: false });
   if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
   if (filtroStato) query = query.eq('stato', filtroStato);
@@ -2125,7 +2237,7 @@ async function loadIscrizioni() {
   }
   const tbody = document.getElementById('tbody-iscrizioni');
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessuna iscrizione trovata</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessuna iscrizione trovata</p></div></td></tr>';
     return;
   }
   tbody.innerHTML = data.map(i => `<tr>
@@ -2134,6 +2246,8 @@ async function loadIscrizioni() {
     <td>${i.tariffa?.nome ? '<span class="badge badge-gray">' + i.tariffa.nome + '</span>' : '<span style="color:var(--text3)">Non assegnata</span>'}</td>
     <td>${i.intestato_nome || '—'}</td>
     <td><span class="badge ${i.stato === 'attiva' ? 'badge-green' : 'badge-gray'}">${i.stato}</span></td>
+    <td>${i.iscrizione_gruppo?.[0]?.gruppo?.societa?.nome ? '<span class="badge badge-gray">' + i.iscrizione_gruppo[0].gruppo.societa.nome + '</span>' : '—'}</td>
+    <td>${i.iscrizione_gruppo?.[0]?.gruppo?.nome || '—'}</td>
     <td>${formatData(i.data_iscrizione)}</td>
     <td style="display:flex;gap:6px;">
       <button class="btn btn-sm btn-primary" onclick="apriModalIscrizione('${i.atleta_id}')">Tariffa / Rate</button>
@@ -6318,11 +6432,12 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       </div>
       <button class="scheda-close" onclick="chiudiSchedaAtleta()">✕</button>
     </div>
-    <div class="tab-bar">
+    <div class="tab-bar" style="display:flex;align-items:center;">
       <button class="tab-btn active" onclick="switchTab('anagrafica')">👤 Anagrafica</button>
       <button class="tab-btn" onclick="switchTab('documenti')">📄 Documenti</button>
       <button class="tab-btn" onclick="switchTab('pagamenti')">💳 Pagamenti</button>
       <button class="tab-btn" onclick="switchTab('note')">📝 Note</button>
+      <button class="btn btn-sm btn-secondary" onclick="stampaSchedaAtleta()" style="margin-left:auto;margin-right:4px;flex-shrink:0" title="Stampa / Salva PDF">🖨️ PDF</button>
     </div>
     <div class="tab-content">
 
