@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v1.5</span>
+      <span class="release-badge" title="Versione attuale">v1.6</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1744,7 +1744,7 @@ async function eliminaTariffa(id, nome) {
 // ============================================================
 async function loadDashboard() {
   document.getElementById('dashboard-sub').textContent =
-    `Benvenuto, ${currentProfilo?.nome} — Stagione ${currentStagioneId ? 'attiva' : 'non configurata'}`;
+    `Benvenuto, ${currentProfilo?.nome} — Stagione ${currentStagioneNome || (currentStagioneId ? 'attiva' : 'non configurata')}`;
 
   // Stats
   const grid = document.getElementById('stats-grid');
@@ -2157,6 +2157,12 @@ async function loadPagamenti() {
   if (filtro !== '') query = query.eq('pagato', filtro === 'true');
 
   let { data } = await query;
+  // Filtro per società lato client
+  if (data && currentSocietaId) {
+    data = data.filter(p =>
+      p.iscrizione?.iscrizione_gruppo?.[0]?.gruppo?.societa_id === currentSocietaId
+    );
+  }
   if (data && search) {
     data = data.filter(p => {
       const nome = ((p.iscrizione?.atleta?.cognome || '') + ' ' + (p.iscrizione?.atleta?.nome || '')).toLowerCase();
@@ -2461,6 +2467,11 @@ document.getElementById('filter-doc-tipo').addEventListener('change', loadDocume
 // Bottone nuovo pagamento (placeholder — i pagamenti si generano dalle rate)
 document.getElementById('btn-nuovo-pagamento')?.addEventListener('click', () =>
   toast('I pagamenti si generano dalla sezione Iscrizioni → Tariffa / Rate', 'warning'));
+
+document.getElementById('btn-nuova-iscrizione')?.addEventListener('click', () => {
+  // Reindirizza alla sezione atleti con messaggio guida
+  toast('Seleziona un atleta dalla sezione Atleti → "Apri" → tab Iscrizione', 'warning');
+});
 
 document.getElementById('btn-salva-profilo')?.addEventListener('click', async () => {
   const { error } = await sb.from('profilo').update({
