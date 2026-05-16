@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v1.1</span>
+      <span class="release-badge" title="Versione attuale">v1.2</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1010,6 +1010,35 @@ tbody tr:last-child { border-bottom: none; }
         </div>
       </div>
 
+
+<!-- STAGIONI -->
+      <div class="section" id="section-stagioni">
+        <div class="page-title">Stagioni</div>
+        <div class="page-sub">Gestione stagioni sportive — imposta la stagione attiva</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-nuova-stagione">+ Nuova stagione</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Data inizio</th>
+                  <th>Data fine</th>
+                  <th>Stato</th>
+                  <th>Note</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-stagioni">
+                <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
 <!-- SOCIETA -->
       <div class="section" id="section-societa">
         <div class="page-title">Società</div>
@@ -1150,6 +1179,7 @@ const MENU = {
     { section: 'documenti', icon: '📄', label: 'Documenti' },
     { section: 'tariffe',   icon: '🏷️', label: 'Tariffe' },
     { section: 'societa',   icon: '🏢', label: 'Società' },
+    { section: 'stagioni',   icon: '📅', label: 'Stagioni' },
     { section: 'onboarding',icon: '🚀', label: 'Nuova società' },
     { section: 'utenti',    icon: '🔐', label: 'Utenti' },
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
@@ -1282,11 +1312,132 @@ async function loadSection(section) {
     case 'utenti':     loadUtenti(); break;
     case 'profilo':    loadProfilo(); break;
     case 'societa':    loadSocietaList(); break;
+    case 'stagioni':    loadStagioni(); break;
     case 'onboarding':    initOnboarding(); break;
     case 'area-genitore': loadAreaGenitore(); break;
   }
 }
 
+
+
+// ============================================================
+// STAGIONI
+// ============================================================
+let editStagioneId = null;
+
+async function loadStagioni() {
+  const { data } = await sb.from('stagione').select('*').order('data_inizio', { ascending: false });
+  const tbody = document.getElementById('tbody-stagioni');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📅</div><p>Nessuna stagione. Creane una con il bottone "+ Nuova stagione".</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(s => {
+    const attiva = s.attiva;
+    return '<tr' + (attiva ? ' style="background:rgba(26,111,255,0.04)"' : '') + '>' +
+      '<td><strong>' + s.nome + '</strong></td>' +
+      '<td>' + (s.data_inizio ? formatData(s.data_inizio) : '—') + '</td>' +
+      '<td>' + (s.data_fine ? formatData(s.data_fine) : '—') + '</td>' +
+      '<td>' + (attiva
+        ? '<span class="badge badge-green">✓ Attiva</span>'
+        : '<button class="btn btn-sm btn-secondary" onclick="impostaStatgioneAttiva('' + s.id + '', '' + s.nome + '')">Imposta attiva</button>') + '</td>' +
+      '<td><span style="color:var(--text3);font-size:13px">' + (s.note || '—') + '</span></td>' +
+      '<td style="display:flex;gap:6px;">' +
+        '<button class="btn btn-sm btn-secondary" onclick="apriModalStagione('' + s.id + '')">Modifica</button>' +
+        (!attiva ? '<button class="btn btn-sm btn-danger" onclick="eliminaStagione('' + s.id + '', '' + s.nome + '')">🗑</button>' : '') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function apriModalStagione(id = null) {
+  editStagioneId = id;
+  document.getElementById('stag-modal-title').textContent = id ? 'Modifica stagione' : 'Nuova stagione';
+  document.getElementById('stag-nome').value = '';
+  document.getElementById('stag-inizio').value = '';
+  document.getElementById('stag-fine').value = '';
+  document.getElementById('stag-note').value = '';
+
+  if (id) {
+    const { data: s } = await sb.from('stagione').select('*').eq('id', id).single();
+    if (s) {
+      document.getElementById('stag-nome').value = s.nome || '';
+      document.getElementById('stag-inizio').value = s.data_inizio || '';
+      document.getElementById('stag-fine').value = s.data_fine || '';
+      document.getElementById('stag-note').value = s.note || '';
+    }
+  } else {
+    // Suggerisci nome automatico
+    const now = new Date();
+    const y = now.getFullYear();
+    document.getElementById('stag-nome').value = y + '/' + (y + 1);
+    document.getElementById('stag-inizio').value = y + '-09-01';
+    document.getElementById('stag-fine').value = (y + 1) + '-06-30';
+  }
+  apriModal('modal-stagione');
+}
+
+async function salvaStagione() {
+  const nome = document.getElementById('stag-nome').value.trim();
+  if (!nome) { toast('Inserisci il nome della stagione', 'error'); return; }
+
+  const payload = {
+    nome,
+    data_inizio: document.getElementById('stag-inizio').value || null,
+    data_fine:   document.getElementById('stag-fine').value || null,
+    note:        document.getElementById('stag-note').value.trim() || null,
+  };
+
+  const btn = document.querySelector('#modal-stagione .btn-primary');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
+
+  try {
+    let error;
+    if (editStagioneId) {
+      ({ error } = await sb.from('stagione').update(payload).eq('id', editStagioneId));
+    } else {
+      ({ error } = await sb.from('stagione').insert({ ...payload, attiva: false }));
+    }
+    if (error) throw new Error(error.message);
+    toast(editStagioneId ? 'Stagione aggiornata!' : 'Stagione creata!', 'success');
+    chiudiModal('modal-stagione');
+    loadStagioni();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Salva';
+  }
+}
+
+async function impostaStatgioneAttiva(id, nome) {
+  if (!confirm('Impostare "' + nome + '" come stagione attiva?\nLa stagione attualmente attiva verrà disattivata.')) return;
+  try {
+    // Disattiva tutte
+    const { error: e1 } = await sb.from('stagione').update({ attiva: false }).eq('attiva', true);
+    if (e1) throw new Error(e1.message);
+    // Attiva quella scelta
+    const { error: e2 } = await sb.from('stagione').update({ attiva: true }).eq('id', id);
+    if (e2) throw new Error(e2.message);
+    // Aggiorna stato globale
+    currentStagioneId = id;
+    currentStagioneNome = nome;
+    toast('Stagione "' + nome + '" attiva!', 'success');
+    loadStagioni();
+    loadDashboard();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function eliminaStagione(id, nome) {
+  if (!confirm('Eliminare la stagione "' + nome + '"?\nAttenzione: non sarà possibile eliminarla se ha iscrizioni collegate. Operazione non reversibile.')) return;
+  const { error } = await sb.from('stagione').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message + ' — verifica che non ci siano iscrizioni collegate.', 'error'); return; }
+  toast('Stagione eliminata', 'success');
+  loadStagioni();
+}
+
+document.getElementById('btn-nuova-stagione')?.addEventListener('click', () => apriModalStagione());
 
 // ============================================================
 // FUNZIONI ELIMINA
@@ -3363,6 +3514,44 @@ function generaHtmlRicevuta(d) {
 </div>
 
 ${disclaimerAsd}
+
+
+<!-- MODAL STAGIONE -->
+<div class="modal-overlay" id="modal-stagione">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title" id="stag-modal-title">Nuova stagione</div>
+      <button class="modal-close" onclick="chiudiModal('modal-stagione')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Nome stagione *</label>
+        <input type="text" id="stag-nome" placeholder="ES. 2026/2027" style="text-transform:uppercase">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <label>Data inizio</label>
+          <input type="date" id="stag-inizio">
+        </div>
+        <div class="field">
+          <label>Data fine</label>
+          <input type="date" id="stag-fine">
+        </div>
+      </div>
+      <div class="field">
+        <label>Note</label>
+        <textarea id="stag-note" placeholder="Eventuali note sulla stagione..." style="min-height:60px"></textarea>
+      </div>
+      <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.2);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);margin-top:4px;">
+        ℹ️ Per attivare una stagione usa il tasto <strong>"Imposta attiva"</strong> dalla tabella. Solo una stagione può essere attiva alla volta.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-stagione')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaStagione()">💾 Salva</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>`; // ###PDF_TEMPLATE_END###
