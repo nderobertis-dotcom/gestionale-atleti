@@ -4012,40 +4012,39 @@ function onTariffaChange() {
   document.getElementById('btn-genera-rate').disabled = false;
 }
 
-function calcolaScadenze(dataInizio, frequenza, nrate) {
+function calcolaScadenze(dataInizio, frequenza, nrateIgnorato) {
+  // Le rate partono dal mese di iscrizione e terminano a giugno
+  // La stagione va da settembre a giugno dell'anno successivo
+  // nrateIgnorato: il numero fisso della tariffa non viene usato — si calcola dal calendario
+
   const scadenze = [];
   const freq = { mensile: 1, trimestrale: 3, semestrale: 6, annuale: 12 };
-  const mesi = freq[frequenza] || 1;
+  const passoMesi = freq[frequenza] || 1;
 
-  // Parsing locale per evitare problemi timezone UTC
   const parti = dataInizio.split('-');
-  const anno = parseInt(parti[0]);
-  const mese = parseInt(parti[1]) - 1; // 0-based
+  const annoInizio = parseInt(parti[0]);
+  const meseInizio = parseInt(parti[1]) - 1; // 0-based (0=gen ... 11=dic)
 
-  // Se numero rate specificato, usa quello
-  if (nrate && nrate > 0) {
-    for (let i = 0; i < nrate; i++) {
-      const dataRata = new Date(anno, mese + (i * mesi), 1);
-      const y = dataRata.getFullYear();
-      const m = String(dataRata.getMonth() + 1).padStart(2, '0');
-      scadenze.push(y + '-' + m + '-01');
-    }
-    return scadenze;
+  // Fine stagione: giugno dell'anno corrente o del prossimo
+  // Se iscrizione da luglio in poi → fine stagione è giugno ANNO+1
+  // Se iscrizione da gennaio a giugno → fine stagione è giugno ANNO
+  let annoFine;
+  if (meseInizio >= 8) { // settembre (8) o oltre → stagione es. 2026/2027 → fine giu 2027
+    annoFine = annoInizio + 1;
+  } else { // gennaio-agosto → fine stagione è giugno dell'anno corrente
+    annoFine = annoInizio;
   }
-
-  // Altrimenti calcola automaticamente fino a giugno
-  const annoFine = mese >= 8 ? anno + 1 : anno;
-  const dataFine = new Date(annoFine, 5, 30);
+  // Data fine: 1 giugno (inclusa) dell'anno di fine stagione
+  const dataFine = new Date(annoFine, 5, 1); // giugno (mese 5)
 
   let i = 0;
-  while (true) {
-    const dataRata = new Date(anno, mese + (i * mesi), 1);
+  while (i < 24) {
+    const dataRata = new Date(annoInizio, meseInizio + (i * passoMesi), 1);
     if (dataRata > dataFine) break;
     const y = dataRata.getFullYear();
     const m = String(dataRata.getMonth() + 1).padStart(2, '0');
     scadenze.push(y + '-' + m + '-01');
     i++;
-    if (i > 24) break;
   }
   return scadenze;
 }
@@ -4071,8 +4070,8 @@ function anteprimaRate() {
     totale += isc;
   }
 
-  if (rata > 0 && nrate > 0) {
-    const scadenze = calcolaScadenze(dataInizio, freq, nrate);
+  if (rata > 0) {
+    const scadenze = calcolaScadenze(dataInizio, freq, 0);
     scadenze.forEach((s, i) => {
       html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">';
       html += '<span>💳 Rata ' + (i+1) + ' — ' + new Date(s).toLocaleDateString('it-IT', {month:'long', year:'numeric'}) + '</span>';
@@ -4104,7 +4103,6 @@ async function salvaIscrizioneTariffa() {
     const t = tariffaSelezionata;
     const isc = parseFloat(t.importo_iscrizione) || 0;
     const rata = parseFloat(t.importo_rata) || 0;
-    const nrate = t.numero_rate || 0;
     const freq = t.frequenza_rata;
 
     // 1. Aggiorna iscrizione con tariffa e intestatario
@@ -4131,7 +4129,7 @@ async function salvaIscrizioneTariffa() {
     }
 
     if (rata > 0) {
-      const scadenze = calcolaScadenze(dataInizio, freq, nrate);
+      const scadenze = calcolaScadenze(dataInizio, freq, 0);
       scadenze.forEach(s => {
         pagamenti.push({
           iscrizione_id: currentIscrizioneId,
