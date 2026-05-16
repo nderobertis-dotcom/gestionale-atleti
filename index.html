@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v1.3</span>
+      <span class="release-badge" title="Versione attuale">v1.4</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -840,6 +840,14 @@ tbody tr:last-child { border-bottom: none; }
         <div class="page-sub">Gestione iscrizioni stagione corrente</div>
         <div class="toolbar">
           <input type="text" class="search-input" id="search-iscrizioni" placeholder="🔍  Cerca atleta...">
+          <select class="btn btn-secondary" id="filter-iscrizioni-gruppo" style="padding:8px 12px">
+            <option value="">Tutti i gruppi</option>
+          </select>
+          <select class="btn btn-secondary" id="filter-iscrizioni-stato" style="padding:8px 12px">
+            <option value="">Tutti gli stati</option>
+            <option value="attiva">Attiva</option>
+            <option value="sospesa">Sospesa</option>
+          </select>
           <button class="btn btn-primary" id="btn-nuova-iscrizione">+ Nuova iscrizione</button>
         </div>
         <div class="card">
@@ -1269,6 +1277,42 @@ function buildMenu(ruolo) {
     div.addEventListener('click', () => navigateTo(item.section));
     nav.appendChild(div);
   });
+  // Aggiorna i badge dopo aver costruito il menu
+  aggiornaNavBadge();
+}
+
+async function aggiornaNavBadge() {
+  try {
+    const oggi = new Date().toISOString().split('T')[0];
+
+    // Rate scadute
+    let qRate = sb.from('v_rate_non_pagate').select('*', { count: 'exact', head: true });
+    if (currentSocietaId) qRate = qRate.eq('societa_id', currentSocietaId);
+    const { count: nRate } = await qRate;
+
+    // Certificati in scadenza (≤60gg)
+    let qCert = sb.from('v_certificati_in_scadenza').select('*', { count: 'exact', head: true });
+    if (currentSocietaId) qCert = qCert.eq('societa_id', currentSocietaId);
+    const { count: nCert } = await qCert;
+
+    // Applica badge alla voce Pagamenti
+    impostaBadge('pagamenti', nRate);
+    // Applica badge alla voce Documenti
+    impostaBadge('documenti', nCert);
+  } catch(e) { /* silenzioso */ }
+}
+
+function impostaBadge(section, count) {
+  const item = document.querySelector(`.nav-item[data-section="${section}"]`);
+  if (!item) return;
+  const existing = item.querySelector('.nav-badge');
+  if (existing) existing.remove();
+  if (count && count > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'nav-badge';
+    badge.textContent = count > 99 ? '99+' : count;
+    item.appendChild(badge);
+  }
 }
 
 // ============================================================
@@ -1288,6 +1332,7 @@ async function loadSocieta() {
   sel.addEventListener('change', () => {
     currentSocietaId = sel.value || null;
     loadSection(getActiveSection());
+    aggiornaNavBadge();
   });
 }
 
@@ -1316,7 +1361,7 @@ async function loadSection(section) {
     case 'atleti':     loadAtleti(); break;
     case 'genitori':   loadGenitori(); break;
     case 'gruppi':     loadGruppi(); break;
-    case 'iscrizioni': loadIscrizioni(); break;
+    case 'iscrizioni': loadIscrizioni(); popolaFiltroGruppiIscrizioni(); break;
     case 'pagamenti':  loadPagamenti(); break;
     case 'documenti':  loadDocumenti(); break;
     case 'tariffe':    loadTariffe(); break;
@@ -2020,12 +2065,32 @@ async function loadGruppi() {
 // ============================================================
 // ISCRIZIONI
 // ============================================================
+
+async function popolaFiltroGruppiIscrizioni() {
+  const sel = document.getElementById('filter-iscrizioni-gruppo');
+  if (!sel) return;
+  let query = sb.from('gruppo').select('id, nome').order('nome');
+  if (currentSocietaId) query = query.eq('societa_id', currentSocietaId);
+  if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
+  const { data } = await query;
+  sel.innerHTML = '<option value="">Tutti i gruppi</option>';
+  (data || []).forEach(g => {
+    const o = document.createElement('option');
+    o.value = g.id; o.textContent = g.nome;
+    sel.appendChild(o);
+  });
+}
+
 async function loadIscrizioni() {
-  const search = document.getElementById('search-iscrizioni')?.value?.toLowerCase() || '';
+  const search      = document.getElementById('search-iscrizioni')?.value?.toLowerCase() || '';
+  const filtroGruppo = document.getElementById('filter-iscrizioni-gruppo')?.value || '';
+  const filtroStato  = document.getElementById('filter-iscrizioni-stato')?.value || '';
+
   let query = sb.from('iscrizione')
-    .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome)')
+    .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo_id, gruppo(nome))')
     .order('data_iscrizione', { ascending: false });
   if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
+  if (filtroStato) query = query.eq('stato', filtroStato);
 
   let { data } = await query;
   if (data && search) {
@@ -2034,6 +2099,9 @@ async function loadIscrizioni() {
       i.atleta?.nome?.toLowerCase().includes(search) ||
       i.intestato_nome?.toLowerCase().includes(search)
     );
+  }
+  if (data && filtroGruppo) {
+    data = data.filter(i => (i.iscrizione_gruppo || []).some(ig => ig.gruppo_id === filtroGruppo));
   }
   const tbody = document.getElementById('tbody-iscrizioni');
   if (!data || data.length === 0) {
@@ -2353,6 +2421,8 @@ document.getElementById('btn-filter-atleti').addEventListener('click', () => {
   document.getElementById('btn-filter-atleti').textContent = visible ? 'Filtri' : 'Filtri ▲';
 });
 document.getElementById('filter-pagamento-stato').addEventListener('change', loadPagamenti);
+document.getElementById('filter-iscrizioni-gruppo')?.addEventListener('change', loadIscrizioni);
+document.getElementById('filter-iscrizioni-stato')?.addEventListener('change', loadIscrizioni);
 document.getElementById('filter-doc-tipo').addEventListener('change', loadDocumenti);
 
 // Bottone nuovo pagamento (placeholder — i pagamenti si generano dalle rate)
