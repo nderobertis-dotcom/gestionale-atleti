@@ -157,7 +157,17 @@ ul { list-style: none; }
   flex-shrink: 0;
 }
 #topbar-title { font-size: 16px; font-weight: 600; flex: 1; }
-#topbar-actions { display: flex; gap: 8px; }
+#topbar-actions { display: flex; gap: 8px; align-items: center; }
+.release-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: linear-gradient(135deg, var(--accent), #0052e0);
+  color: #fff; font-size: 10px; font-weight: 700;
+  padding: 3px 9px; border-radius: 100px;
+  letter-spacing: 0.3px; white-space: nowrap;
+  cursor: default; user-select: none;
+  box-shadow: 0 1px 6px rgba(26,111,255,0.35);
+}
+.release-badge::before { content: '●'; font-size: 6px; opacity: 0.8; animation: pulse 2s infinite; }
 #content { flex: 1; overflow-y: auto; padding: 24px; }
 
 /* HAMBURGER (mobile) */
@@ -662,6 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
+      <span class="release-badge" title="Versione attuale">v1.1</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
