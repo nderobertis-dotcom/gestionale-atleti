@@ -1024,8 +1024,8 @@ tbody tr:last-child { border-bottom: none; }
               <thead>
                 <tr>
                   <th>Nome</th>
-                  <th>Data inizio</th>
-                  <th>Data fine</th>
+                  <th>Inizio stagione</th>
+                  <th>Fine stagione</th>
                   <th>Stato</th>
                   <th>Note</th>
                   <th></th>
@@ -1336,8 +1336,8 @@ async function loadStagioni() {
     const attiva = s.attiva;
     return '<tr' + (attiva ? ' style="background:rgba(26,111,255,0.04)"' : '') + '>' +
       '<td><strong>' + s.nome + '</strong></td>' +
-      '<td>' + (s.anno_inizio || '—') + '</td>' +
-      '<td>' + (s.anno_fine || '—') + '</td>' +
+      '<td>' + (s.anno_inizio ? 'Dal 01/09/' + s.anno_inizio : '—') + '</td>' +
+      '<td>' + (s.anno_fine ? 'Al 30/06/' + s.anno_fine : '—') + '</td>' +
       '<td>' + (attiva
         ? '<span class="badge badge-green">✓ Attiva</span>'
         : '<button class="btn btn-sm btn-secondary" onclick="impostaStatgioneAttiva(&#39;' + s.id + '&#39;, &#39;' + s.nome.replace(/'/g, '') + '&#39;)">Imposta attiva</button>') + '</td>' +
