@@ -6054,8 +6054,8 @@ async function generaCardFiglio(atleta) {
   const oggi = new Date();
 
   // ── Iscrizione con dati completi di società e gruppo ──────────────────────
-  // Cerca iscrizione per stagione corrente; fallback all'iscrizione più recente
-  const _iscSelect = `id, stato, intestato_nome,
+  // Carica tutte le iscrizioni dell'atleta, priorità: attiva, poi più recente
+  const _iscSelect = `id, stato, intestato_nome, stagione_id,
       stagione(nome),
       tariffa(nome),
       iscrizione_gruppo(
@@ -6064,19 +6064,17 @@ async function generaCardFiglio(atleta) {
           societa(id, nome, tipo, telefono, email, indirizzo, comune, provincia, pec)
         )
       )`;
+  const { data: tuteIscrizioni } = await sb.from('iscrizione')
+    .select(_iscSelect)
+    .eq('atleta_id', atleta.id)
+    .order('data_iscrizione', { ascending: false });
+
+  // Scegli: 1) stagione corrente, 2) qualsiasi attiva, 3) più recente
   let isc = null;
-  if (currentStagioneId) {
-    const { data: iscCurrent } = await sb.from('iscrizione')
-      .select(_iscSelect).eq('atleta_id', atleta.id)
-      .eq('stagione_id', currentStagioneId).maybeSingle();
-    isc = iscCurrent;
-  }
-  // Fallback: iscrizione più recente (indipendente dalla stagione)
-  if (!isc) {
-    const { data: iscRecent } = await sb.from('iscrizione')
-      .select(_iscSelect).eq('atleta_id', atleta.id)
-      .order('data_iscrizione', { ascending: false }).limit(1);
-    isc = iscRecent?.[0] || null;
+  if (tuteIscrizioni && tuteIscrizioni.length > 0) {
+    isc = tuteIscrizioni.find(i => i.stagione_id === currentStagioneId)
+       || tuteIscrizioni.find(i => i.stato === 'attiva')
+       || tuteIscrizioni[0];
   }
 
   const societaObj  = isc?.iscrizione_gruppo?.[0]?.gruppo?.societa || null;
