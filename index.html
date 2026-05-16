@@ -1586,11 +1586,12 @@ async function loadRiepilogoFinanziario() {
     const { data, error } = await query;
     if (error) throw new Error(error.message);
 
-    // Aggrega per società
+    // Aggrega per società (filtrata se currentSocietaId è impostato)
     const map = {};
     (data || []).forEach(p => {
       const soc = p.iscrizione?.iscrizione_gruppo?.[0]?.gruppo?.societa;
       if (!soc) return;
+      if (currentSocietaId && soc.id !== currentSocietaId) return;
       if (!map[soc.id]) map[soc.id] = { nome: soc.nome, atteso: 0, incassato: 0 };
       const imp = parseFloat(p.importo) || 0;
       map[soc.id].atteso += imp;
@@ -1713,6 +1714,7 @@ async function loadDashboard() {
   if (currentSocietaId) {
     qRate = qRate.eq('societa_id', currentSocietaId);
     qCert = qCert.eq('societa_id', currentSocietaId);
+    qIscrizioni = qIscrizioni.eq('societa_id', currentSocietaId);
   }
   const [atleti, iscrizioni, pagamentiScaduti, certScadenza] = await Promise.all([qAtleti, qIscrizioni, qRate, qCert]);
 
