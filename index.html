@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v1.7</span>
+      <span class="release-badge" title="Versione attuale">v1.8</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1032,6 +1032,57 @@ tbody tr:last-child { border-bottom: none; }
       </div>
 
 
+
+      <!-- PALESTRE -->
+      <div class="section" id="section-palestre">
+        <div class="page-title">Palestre</div>
+        <div class="page-sub">Impianti sportivi utilizzati per gli allenamenti</div>
+        <div class="toolbar">
+          <input type="text" class="search-input" id="search-palestre" placeholder="🔍  Cerca palestra...">
+          <button class="btn btn-primary" id="btn-nuova-palestra">+ Nuova palestra</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Indirizzo</th><th>Comune</th><th>Capienza</th><th>Società</th><th>Note</th><th></th></tr></thead>
+              <tbody id="tbody-palestre"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CALENDARIO -->
+      <div class="section" id="section-calendario">
+        <div class="page-title">Calendario allenamenti</div>
+        <div class="page-sub">Pianificazione settimanale per gruppo e palestra</div>
+        <div class="toolbar">
+          <select id="filter-cal-gruppo" style="padding:8px 12px" class="btn btn-secondary">
+            <option value="">Tutti i gruppi</option>
+          </select>
+          <button class="btn btn-primary" id="btn-nuovo-allenamento">+ Nuovo allenamento</button>
+        </div>
+        <div id="calendario-grid"></div>
+      </div>
+
+      <!-- PRESENZE -->
+      <div class="section" id="section-presenze">
+        <div class="page-title">Registro presenze</div>
+        <div class="page-sub">Registra le presenze per gruppo e seduta</div>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;">
+          <select id="pres-gruppo" style="padding:8px 12px" class="btn btn-secondary">
+            <option value="">Seleziona gruppo...</option>
+          </select>
+          <input type="date" id="pres-data" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text)">
+          <button class="btn btn-primary" onclick="caricaPresenze()">Carica</button>
+        </div>
+        <div id="presenze-container">
+          <div style="text-align:center;padding:40px;color:var(--text3)">
+            <div style="font-size:32px;margin-bottom:8px">✅</div>
+            <p>Seleziona un gruppo e una data per registrare le presenze</p>
+          </div>
+        </div>
+      </div>
+
 <!-- STAGIONI -->
       <div class="section" id="section-stagioni">
         <div class="page-title">Stagioni</div>
@@ -1200,6 +1251,9 @@ const MENU = {
     { section: 'documenti', icon: '📄', label: 'Documenti' },
     { section: 'tariffe',   icon: '🏷️', label: 'Tariffe' },
     { section: 'societa',   icon: '🏢', label: 'Società' },
+    { section: 'palestre',   icon: '🏟️', label: 'Palestre' },
+    { section: 'calendario', icon: '🗓️', label: 'Calendario' },
+    { section: 'presenze',   icon: '✅', label: 'Presenze' },
     { section: 'stagioni',   icon: '📅', label: 'Stagioni' },
     { section: 'onboarding',icon: '🚀', label: 'Nuova società' },
     { section: 'utenti',    icon: '🔐', label: 'Utenti' },
@@ -1213,12 +1267,16 @@ const MENU = {
     { section: 'iscrizioni',icon: '📋', label: 'Iscrizioni' },
     { section: 'pagamenti', icon: '💳', label: 'Pagamenti' },
     { section: 'documenti', icon: '📄', label: 'Documenti' },
+    { section: 'palestre',   icon: '🏟️', label: 'Palestre' },
+    { section: 'calendario', icon: '🗓️', label: 'Calendario' },
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
   ],
   allenatore: [
     { section: 'dashboard', icon: '◉', label: 'Dashboard' },
     { section: 'atleti',    icon: '👤', label: 'I miei atleti' },
     { section: 'documenti', icon: '📄', label: 'Certificati' },
+    { section: 'calendario', icon: '🗓️', label: 'Calendario' },
+    { section: 'presenze',   icon: '✅', label: 'Presenze' },
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
   ],
   genitore: [
@@ -1370,6 +1428,9 @@ async function loadSection(section) {
     case 'utenti':     loadUtenti(); break;
     case 'profilo':    loadProfilo(); break;
     case 'societa':    loadSocietaList(); break;
+    case 'palestre':    loadPalestre(); break;
+    case 'calendario':  loadCalendario(); break;
+    case 'presenze':    loadPresenzeSetup(); break;
     case 'stagioni':    loadStagioni(); break;
     case 'onboarding':    initOnboarding(); break;
     case 'area-genitore': loadAreaGenitore(); break;
@@ -1377,6 +1438,377 @@ async function loadSection(section) {
 }
 
 
+
+
+// ============================================================
+// PALESTRE
+// ============================================================
+let editPalestraId = null;
+
+async function loadPalestre() {
+  const search = document.getElementById('search-palestre')?.value?.toLowerCase() || '';
+  let query = sb.from('palestra').select('*, societa(nome)').order('nome');
+  if (currentSocietaId) query = query.eq('societa_id', currentSocietaId);
+  let { data } = await query;
+  if (data && search) data = data.filter(p => p.nome?.toLowerCase().includes(search) || p.comune?.toLowerCase().includes(search));
+  const tbody = document.getElementById('tbody-palestre');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🏟️</div><p>Nessuna palestra. Aggiungine una con il bottone "+ Nuova palestra".</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(p => `<tr>
+    <td><strong>${p.nome}</strong></td>
+    <td>${p.indirizzo || '—'}</td>
+    <td>${p.comune || '—'}</td>
+    <td>${p.capienza ? p.capienza + ' posti' : '—'}</td>
+    <td>${p.societa?.nome ? '<span class="badge badge-gray">' + p.societa.nome + '</span>' : '—'}</td>
+    <td style="color:var(--text3);font-size:12px">${p.note || '—'}</td>
+    <td style="display:flex;gap:6px;">
+      <button class="btn btn-sm btn-secondary" onclick="apriModalPalestra('${p.id}')">Modifica</button>
+      ${currentProfilo?.ruolo === 'amministratore' ? '<button class="btn btn-sm btn-danger" onclick="eliminaPalestra(\''+p.id+'\', \''+p.nome+'\')">🗑</button>' : ''}
+    </td>
+  </tr>`).join('');
+}
+
+async function apriModalPalestra(id = null) {
+  editPalestraId = id;
+  document.getElementById('pal-modal-title').textContent = id ? 'Modifica palestra' : 'Nuova palestra';
+  ['pal-nome','pal-indirizzo','pal-comune','pal-capienza','pal-note'].forEach(f => {
+    const el = document.getElementById(f); if(el) el.value = '';
+  });
+  const sel = document.getElementById('pal-societa');
+  sel.innerHTML = '<option value="">— Seleziona società —</option>';
+  const { data: soc } = await sb.from('societa').select('id,nome').order('nome');
+  (soc||[]).forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.nome; sel.appendChild(o); });
+  if (currentSocietaId) sel.value = currentSocietaId;
+  if (id) {
+    const { data: p } = await sb.from('palestra').select('*').eq('id', id).single();
+    if (p) {
+      document.getElementById('pal-nome').value = p.nome || '';
+      document.getElementById('pal-indirizzo').value = p.indirizzo || '';
+      document.getElementById('pal-comune').value = p.comune || '';
+      document.getElementById('pal-capienza').value = p.capienza || '';
+      document.getElementById('pal-note').value = p.note || '';
+      sel.value = p.societa_id || '';
+    }
+  }
+  apriModal('modal-palestra');
+}
+
+async function salvaPalestra() {
+  const nome = document.getElementById('pal-nome').value.trim();
+  if (!nome) { toast('Inserisci il nome della palestra', 'error'); return; }
+  const payload = {
+    nome,
+    societa_id: document.getElementById('pal-societa').value || null,
+    indirizzo:  document.getElementById('pal-indirizzo').value.trim() || null,
+    comune:     document.getElementById('pal-comune').value.trim() || null,
+    capienza:   parseInt(document.getElementById('pal-capienza').value) || null,
+    note:       document.getElementById('pal-note').value.trim() || null,
+  };
+  const btn = document.querySelector('#modal-palestra .btn-primary');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
+  try {
+    const { error } = editPalestraId
+      ? await sb.from('palestra').update(payload).eq('id', editPalestraId)
+      : await sb.from('palestra').insert(payload);
+    if (error) throw new Error(error.message);
+    toast(editPalestraId ? 'Palestra aggiornata!' : 'Palestra aggiunta!', 'success');
+    chiudiModal('modal-palestra');
+    loadPalestre();
+  } catch(e) { toast('Errore: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '💾 Salva'; }
+}
+
+async function eliminaPalestra(id, nome) {
+  if (!confirm('Eliminare la palestra "' + nome + '"?')) return;
+  const { error } = await sb.from('palestra').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Palestra eliminata', 'success');
+  loadPalestre();
+}
+
+document.getElementById('btn-nuova-palestra')?.addEventListener('click', () => apriModalPalestra());
+document.getElementById('search-palestre')?.addEventListener('input', debounce(loadPalestre, 300));
+
+// ============================================================
+// CALENDARIO ALLENAMENTI
+// ============================================================
+let editAllenamentoId = null;
+const GIORNI = ['','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+
+async function loadCalendario() {
+  const filtroGruppo = document.getElementById('filter-cal-gruppo')?.value || '';
+
+  // Popola select gruppi
+  const selG = document.getElementById('filter-cal-gruppo');
+  if (selG && selG.options.length <= 1) {
+    let qg = sb.from('gruppo').select('id,nome').order('nome');
+    if (currentSocietaId) qg = qg.eq('societa_id', currentSocietaId);
+    if (currentStagioneId) qg = qg.eq('stagione_id', currentStagioneId);
+    const { data: gruppi } = await qg;
+    selG.innerHTML = '<option value="">Tutti i gruppi</option>';
+    (gruppi||[]).forEach(g => { const o=document.createElement('option'); o.value=g.id; o.textContent=g.nome; selG.appendChild(o); });
+  }
+
+  let query = sb.from('allenamento')
+    .select('*, gruppo(nome, societa(nome)), palestra(nome, comune)')
+    .order('giorno_settimana').order('ora_inizio');
+  if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
+  if (filtroGruppo) query = query.eq('gruppo_id', filtroGruppo);
+
+  const { data } = await query;
+  const grid = document.getElementById('calendario-grid');
+
+  if (!data || data.length === 0) {
+    grid.innerHTML = '<div class="card"><div style="text-align:center;padding:40px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">🗓️</div><p>Nessun allenamento pianificato. Aggiungine uno con il bottone "+ Nuovo allenamento".</p></div></div>';
+    return;
+  }
+
+  // Raggruppa per giorno
+  const byGiorno = {};
+  for (let i=1; i<=7; i++) byGiorno[i] = [];
+  data.forEach(a => (byGiorno[a.giorno_settimana] = byGiorno[a.giorno_settimana] || []).push(a));
+
+  grid.innerHTML = Object.entries(byGiorno).filter(([,v]) => v.length > 0).map(([g, als]) =>
+    '<div class="card" style="margin-bottom:16px">' +
+    '<div class="card-header"><div class="card-title">📅 ' + GIORNI[g] + '</div></div>' +
+    als.map(a => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--mono);font-size:13px;min-width:100px;color:var(--accent);font-weight:600">
+          ${a.ora_inizio?.slice(0,5)} – ${a.ora_fine?.slice(0,5)}
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px">${a.gruppo?.nome || '—'}</div>
+          <div style="font-size:12px;color:var(--text3)">
+            🏟️ ${a.palestra?.nome || 'Palestra non assegnata'}${a.palestra?.comune ? ' — ' + a.palestra.comune : ''}
+            ${a.gruppo?.societa?.nome ? ' &nbsp;·&nbsp; ' + a.gruppo.societa.nome : ''}
+          </div>
+          ${a.note ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + a.note + '</div>' : ''}
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-secondary" onclick="apriModalAllenamento('${a.id}')">Modifica</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminaAllenamento('${a.id}')">🗑</button>
+        </div>
+      </div>`).join('') +
+    '</div>'
+  ).join('');
+}
+
+async function apriModalAllenamento(id = null) {
+  editAllenamentoId = id;
+  document.getElementById('all-modal-title').textContent = id ? 'Modifica allenamento' : 'Nuovo allenamento';
+  ['all-giorno','all-inizio','all-fine','all-note'].forEach(f => {
+    const el = document.getElementById(f); if(el) el.value = '';
+  });
+
+  // Popola gruppi
+  const selG = document.getElementById('all-gruppo');
+  selG.innerHTML = '<option value="">— Seleziona gruppo —</option>';
+  let qg = sb.from('gruppo').select('id,nome').order('nome');
+  if (currentSocietaId) qg = qg.eq('societa_id', currentSocietaId);
+  if (currentStagioneId) qg = qg.eq('stagione_id', currentStagioneId);
+  const { data: gruppi } = await qg;
+  (gruppi||[]).forEach(g => { const o=document.createElement('option'); o.value=g.id; o.textContent=g.nome; selG.appendChild(o); });
+
+  // Popola palestre
+  const selP = document.getElementById('all-palestra');
+  selP.innerHTML = '<option value="">— Nessuna palestra —</option>';
+  let qp = sb.from('palestra').select('id,nome,comune').order('nome');
+  if (currentSocietaId) qp = qp.eq('societa_id', currentSocietaId);
+  const { data: palestre } = await qp;
+  (palestre||[]).forEach(p => { const o=document.createElement('option'); o.value=p.id; o.textContent=p.nome+(p.comune?' ('+p.comune+')':''); selP.appendChild(o); });
+
+  if (id) {
+    const { data: a } = await sb.from('allenamento').select('*').eq('id', id).single();
+    if (a) {
+      selG.value = a.gruppo_id || '';
+      selP.value = a.palestra_id || '';
+      document.getElementById('all-giorno').value = a.giorno_settimana || '';
+      document.getElementById('all-inizio').value = a.ora_inizio?.slice(0,5) || '';
+      document.getElementById('all-fine').value = a.ora_fine?.slice(0,5) || '';
+      document.getElementById('all-note').value = a.note || '';
+    }
+  }
+  apriModal('modal-allenamento');
+}
+
+async function salvaAllenamento() {
+  const gruppoId = document.getElementById('all-gruppo').value;
+  const giorno   = parseInt(document.getElementById('all-giorno').value);
+  const inizio   = document.getElementById('all-inizio').value;
+  const fine     = document.getElementById('all-fine').value;
+  if (!gruppoId || !giorno || !inizio || !fine) { toast('Compila tutti i campi obbligatori', 'error'); return; }
+  const payload = {
+    gruppo_id:       gruppoId,
+    palestra_id:     document.getElementById('all-palestra').value || null,
+    stagione_id:     currentStagioneId,
+    giorno_settimana: giorno,
+    ora_inizio:      inizio,
+    ora_fine:        fine,
+    note:            document.getElementById('all-note').value.trim() || null,
+  };
+  const btn = document.querySelector('#modal-allenamento .btn-primary');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
+  try {
+    const { error } = editAllenamentoId
+      ? await sb.from('allenamento').update(payload).eq('id', editAllenamentoId)
+      : await sb.from('allenamento').insert(payload);
+    if (error) throw new Error(error.message);
+    toast(editAllenamentoId ? 'Allenamento aggiornato!' : 'Allenamento aggiunto!', 'success');
+    chiudiModal('modal-allenamento');
+    loadCalendario();
+  } catch(e) { toast('Errore: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '💾 Salva'; }
+}
+
+async function eliminaAllenamento(id) {
+  if (!confirm('Eliminare questo allenamento dal calendario? Le presenze registrate verranno eliminate.')) return;
+  await sb.from('presenza').delete().eq('allenamento_id', id);
+  const { error } = await sb.from('allenamento').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Allenamento eliminato', 'success');
+  loadCalendario();
+}
+
+document.getElementById('btn-nuovo-allenamento')?.addEventListener('click', () => apriModalAllenamento());
+document.getElementById('filter-cal-gruppo')?.addEventListener('change', loadCalendario);
+
+// ============================================================
+// PRESENZE
+// ============================================================
+async function loadPresenzeSetup() {
+  // Popola select gruppi
+  const selG = document.getElementById('pres-gruppo');
+  let qg = sb.from('gruppo').select('id,nome').order('nome');
+  if (currentSocietaId) qg = qg.eq('societa_id', currentSocietaId);
+  if (currentStagioneId) qg = qg.eq('stagione_id', currentStagioneId);
+  // Se allenatore filtra per i suoi gruppi
+  if (currentProfilo?.ruolo === 'allenatore') {
+    const { data: myG } = await sb.from('allenatore_gruppo').select('gruppo_id').eq('profilo_id', currentProfilo.id);
+    if (myG && myG.length > 0) qg = qg.in('id', myG.map(g => g.gruppo_id));
+  }
+  const { data: gruppi } = await qg;
+  selG.innerHTML = '<option value="">Seleziona gruppo...</option>';
+  (gruppi||[]).forEach(g => { const o=document.createElement('option'); o.value=g.id; o.textContent=g.nome; selG.appendChild(o); });
+  // Data di default: oggi
+  document.getElementById('pres-data').value = new Date().toISOString().split('T')[0];
+}
+
+async function caricaPresenze() {
+  const gruppoId = document.getElementById('pres-gruppo').value;
+  const data     = document.getElementById('pres-data').value;
+  if (!gruppoId || !data) { toast('Seleziona gruppo e data', 'error'); return; }
+
+  const container = document.getElementById('presenze-container');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  // Trova l'allenamento del gruppo per quel giorno della settimana
+  const dataObj = new Date(data + 'T00:00:00');
+  const giornoSettimana = dataObj.getDay() === 0 ? 7 : dataObj.getDay(); // 1=lun ... 7=dom
+
+  const { data: allenamenti } = await sb.from('allenamento')
+    .select('id, ora_inizio, ora_fine, palestra(nome)')
+    .eq('gruppo_id', gruppoId)
+    .eq('giorno_settimana', giornoSettimana)
+    .eq('stagione_id', currentStagioneId);
+
+  // Atleti del gruppo
+  const { data: iscGruppi } = await sb.from('iscrizione_gruppo')
+    .select('iscrizione!inner(atleta_id, stagione_id, atleta(cognome, nome))')
+    .eq('gruppo_id', gruppoId)
+    .eq('iscrizione.stagione_id', currentStagioneId);
+
+  const atleti = (iscGruppi||[]).map(ig => ig.iscrizione?.atleta).filter(Boolean);
+  atleti.sort((a,b) => (a.cognome||'').localeCompare(b.cognome||''));
+
+  if (atleti.length === 0) {
+    container.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px">Nessun atleta iscritto in questo gruppo per la stagione corrente.</p></div>';
+    return;
+  }
+
+  const allenamentoId = allenamenti?.[0]?.id || null;
+  const allenamInfo = allenamenti?.[0];
+
+  // Carica presenze già registrate
+  let presenzeEsistenti = {};
+  if (allenamentoId) {
+    const { data: pres } = await sb.from('presenza')
+      .select('atleta_id, presente, id')
+      .eq('allenamento_id', allenamentoId)
+      .eq('data', data);
+    (pres||[]).forEach(p => { presenzeEsistenti[p.atleta_id] = p; });
+  }
+
+  const dataFmt = dataObj.toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  let html = '<div class="card">';
+  html += '<div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">';
+  html += '<div><div class="card-title">Presenze — ' + dataFmt + '</div>';
+  if (allenamInfo) html += '<div style="font-size:12px;color:var(--text3)">🕐 ' + (allenamInfo.ora_inizio?.slice(0,5)||'') + ' – ' + (allenamInfo.ora_fine?.slice(0,5)||'') + (allenamInfo.palestra?.nome ? ' &nbsp;·&nbsp; 🏟️ ' + allenamInfo.palestra.nome : '') + '</div>';
+  else html += '<div style="font-size:12px;color:var(--danger)">⚠ Nessun allenamento pianificato per questo giorno — le presenze verranno comunque salvate</div>';
+  html += '</div>';
+  html += '<button class="btn btn-primary" onclick="salvaPresenze(&#39;' + gruppoId + '&#39;,&#39;' + data + '&#39;)">💾 Salva presenze</button>';
+  html += '</div>';
+
+  html += '<div style="display:grid;gap:4px;margin-top:8px;">';
+  atleti.forEach(a => {
+    const presente = presenzeEsistenti[a.atleta_id]?.presente ?? true; // default: presente
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius);background:' + (presente?'rgba(26,158,106,0.05)':'rgba(224,92,92,0.05)') + ';border:1px solid ' + (presente?'rgba(26,158,106,0.15)':'rgba(224,92,92,0.15)') + ';">';
+    html += '<div style="flex:1;font-size:14px;font-weight:500">' + (a.cognome||'') + ' ' + (a.nome||'') + '</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button class="btn btn-sm ' + (presente?'btn-primary':'btn-secondary') + '" onclick="togglePresenza(this,true)" data-atleta="' + a.atleta_id + '" data-stato="' + (presente?'1':'0') + '">✓ Presente</button>';
+    html += '<button class="btn btn-sm ' + (!presente?'btn-danger':'btn-secondary') + '" onclick="togglePresenza(this,false)" data-atleta="' + a.atleta_id + '">✕ Assente</button>';
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+
+  // Salva allenamentoId nel container per salvaPresenze
+  container.dataset.allenamentoId = allenamentoId || '';
+  container.innerHTML = html;
+}
+
+function togglePresenza(btn, presente) {
+  const row = btn.closest('div[data-atleta]') || btn.parentElement.parentElement;
+  const btns = btn.parentElement.querySelectorAll('button');
+  btns[0].className = 'btn btn-sm ' + (presente ? 'btn-primary' : 'btn-secondary');
+  btns[1].className = 'btn btn-sm ' + (!presente ? 'btn-danger' : 'btn-secondary');
+  row.style.background = presente ? 'rgba(26,158,106,0.05)' : 'rgba(224,92,92,0.05)';
+  row.style.border = '1px solid ' + (presente ? 'rgba(26,158,106,0.15)' : 'rgba(224,92,92,0.15)');
+}
+
+async function salvaPresenze(gruppoId, data) {
+  const container = document.getElementById('presenze-container');
+  let allenamentoId = container.dataset.allenamentoId || null;
+
+  // Se non c'è allenamento pianificato, ne creo uno al volo
+  if (!allenamentoId && currentStagioneId) {
+    const dataObj = new Date(data + 'T00:00:00');
+    const giorno = dataObj.getDay() === 0 ? 7 : dataObj.getDay();
+    const { data: newAll, error } = await sb.from('allenamento').insert({
+      gruppo_id: gruppoId, stagione_id: currentStagioneId,
+      giorno_settimana: giorno, ora_inizio: '00:00', ora_fine: '00:00'
+    }).select('id').single();
+    if (error) { toast('Errore creazione allenamento: ' + error.message, 'error'); return; }
+    allenamentoId = newAll.id;
+  }
+
+  // Raccoglie lo stato di ogni atleta
+  const righe = container.querySelectorAll('div[data-atleta]');
+  if (righe.length === 0) { toast('Nessun atleta da salvare', 'error'); return; }
+
+  const upserts = Array.from(righe).map(row => ({
+    allenamento_id: allenamentoId,
+    atleta_id:      row.dataset.atleta,
+    data:           data,
+    presente:       row.querySelector('.btn-primary') !== null && row.querySelector('.btn-primary').textContent.includes('Presente'),
+    registrato_da:  currentUser?.id || null,
+  }));
+
+  const { error } = await sb.from('presenza').upsert(upserts, { onConflict: 'allenamento_id,atleta_id,data' });
+  if (error) { toast('Errore salvataggio: ' + error.message, 'error'); return; }
+  toast('Presenze salvate! (' + upserts.length + ' atleti)', 'success');
+}
 
 // ============================================================
 // STAGIONI
@@ -6807,6 +7239,72 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     </div>
   </div>
 </div>
+
+<!-- MODAL PALESTRA -->
+<div class="modal-overlay" id="modal-palestra">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="pal-modal-title">Nuova palestra</div>
+      <button class="modal-close" onclick="chiudiModal('modal-palestra')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Nome *</label><input type="text" id="pal-nome" placeholder="Es. Palestra Comunale"></div>
+      <div class="field"><label>Società</label>
+        <select id="pal-societa"><option value="">— Seleziona società —</option></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field"><label>Indirizzo</label><input type="text" id="pal-indirizzo" placeholder="Via Roma 1"></div>
+        <div class="field"><label>Comune</label><input type="text" id="pal-comune" placeholder="Molfetta"></div>
+      </div>
+      <div class="field"><label>Capienza (posti)</label><input type="number" id="pal-capienza" placeholder="50" min="0"></div>
+      <div class="field"><label>Note</label><textarea id="pal-note" style="min-height:60px" placeholder="Eventuali note..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-palestra')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaPalestra()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ALLENAMENTO -->
+<div class="modal-overlay" id="modal-allenamento">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="all-modal-title">Nuovo allenamento</div>
+      <button class="modal-close" onclick="chiudiModal('modal-allenamento')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Gruppo / Squadra *</label>
+        <select id="all-gruppo"><option value="">— Seleziona gruppo —</option></select>
+      </div>
+      <div class="field"><label>Giorno della settimana *</label>
+        <select id="all-giorno">
+          <option value="">— Seleziona giorno —</option>
+          <option value="1">Lunedì</option>
+          <option value="2">Martedì</option>
+          <option value="3">Mercoledì</option>
+          <option value="4">Giovedì</option>
+          <option value="5">Venerdì</option>
+          <option value="6">Sabato</option>
+          <option value="7">Domenica</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field"><label>Ora inizio *</label><input type="time" id="all-inizio"></div>
+        <div class="field"><label>Ora fine *</label><input type="time" id="all-fine"></div>
+      </div>
+      <div class="field"><label>Palestra</label>
+        <select id="all-palestra"><option value="">— Nessuna —</option></select>
+      </div>
+      <div class="field"><label>Note</label><textarea id="all-note" style="min-height:60px" placeholder="Eventuali note..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-allenamento')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaAllenamento()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
 
 </body>
 </html>
