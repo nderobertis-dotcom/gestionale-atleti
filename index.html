@@ -3516,43 +3516,6 @@ function generaHtmlRicevuta(d) {
 ${disclaimerAsd}
 
 
-<!-- MODAL STAGIONE -->
-<div class="modal-overlay" id="modal-stagione">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-header">
-      <div class="modal-title" id="stag-modal-title">Nuova stagione</div>
-      <button class="modal-close" onclick="chiudiModal('modal-stagione')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="field">
-        <label>Nome stagione *</label>
-        <input type="text" id="stag-nome" placeholder="ES. 2026/2027" style="text-transform:uppercase">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div class="field">
-          <label>Data inizio</label>
-          <input type="date" id="stag-inizio">
-        </div>
-        <div class="field">
-          <label>Data fine</label>
-          <input type="date" id="stag-fine">
-        </div>
-      </div>
-      <div class="field">
-        <label>Note</label>
-        <textarea id="stag-note" placeholder="Eventuali note sulla stagione..." style="min-height:60px"></textarea>
-      </div>
-      <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.2);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);margin-top:4px;">
-        ℹ️ Per attivare una stagione usa il tasto <strong>"Imposta attiva"</strong> dalla tabella. Solo una stagione può essere attiva alla volta.
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="chiudiModal('modal-stagione')">Annulla</button>
-      <button class="btn btn-primary" onclick="salvaStagione()">💾 Salva</button>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>`; // ###PDF_TEMPLATE_END###
 }
@@ -6352,6 +6315,44 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-scheda-genitore')">Chiudi</button>
       <button class="btn btn-primary" id="scheda-genitore-modifica">✏️ Modifica</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL STAGIONE -->
+<div class="modal-overlay" id="modal-stagione">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title" id="stag-modal-title">Nuova stagione</div>
+      <button class="modal-close" onclick="chiudiModal('modal-stagione')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Nome stagione *</label>
+        <input type="text" id="stag-nome" placeholder="ES. 2026/2027" style="text-transform:uppercase">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <label>Data inizio</label>
+          <input type="date" id="stag-inizio">
+        </div>
+        <div class="field">
+          <label>Data fine</label>
+          <input type="date" id="stag-fine">
+        </div>
+      </div>
+      <div class="field">
+        <label>Note</label>
+        <textarea id="stag-note" placeholder="Eventuali note sulla stagione..." style="min-height:60px"></textarea>
+      </div>
+      <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.2);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);margin-top:4px;">
+        ℹ️ Per attivare una stagione usa il tasto <strong>"Imposta attiva"</strong> dalla tabella. Solo una stagione può essere attiva alla volta.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-stagione')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaStagione()">💾 Salva</button>
     </div>
   </div>
 </div>
