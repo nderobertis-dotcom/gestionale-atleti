@@ -1505,16 +1505,48 @@ async function niSelezionaAtleta(id, nome) {
       'ℹ️ Nessuna iscrizione per la stagione <strong>' + (currentStagioneNome||'corrente') + '</strong>. Verrà creata al salvataggio.</div>';
   }
 
-  // Popola select gruppo
+  // Recupera la società dell'atleta:
+  // 1. Da iscrizione corrente (se esiste) → gruppo → societa
+  // 2. Da iscrizione precedente (stagione precedente)
+  // 3. Fallback: currentSocietaId o tutte
+  let atletaSocietaId = null;
+  let atletaSocietaNome = '';
+
+  if (isc) {
+    const { data: ig0 } = await sb.from('iscrizione_gruppo')
+      .select('gruppo(societa_id, societa(nome))').eq('iscrizione_id', isc.id).maybeSingle();
+    atletaSocietaId = ig0?.gruppo?.societa_id || null;
+    atletaSocietaNome = ig0?.gruppo?.societa?.nome || '';
+  }
+  if (!atletaSocietaId) {
+    // cerca iscrizione più recente in qualsiasi stagione
+    const { data: iscPrev } = await sb.from('iscrizione')
+      .select('id, iscrizione_gruppo(gruppo(societa_id, societa(nome)))')
+      .eq('atleta_id', id).order('data_iscrizione', { ascending: false }).limit(1);
+    const prev = iscPrev?.[0];
+    atletaSocietaId = prev?.iscrizione_gruppo?.[0]?.gruppo?.societa_id || null;
+    atletaSocietaNome = prev?.iscrizione_gruppo?.[0]?.gruppo?.societa?.nome || '';
+  }
+  if (!atletaSocietaId) atletaSocietaId = currentSocietaId; // fallback
+
+  // Popola select gruppo filtrato per la società dell'atleta
   const selG = document.getElementById('ni-gruppo');
   selG.innerHTML = '<option value="">— Seleziona gruppo —</option>';
-  let qg = sb.from('gruppo').select('id,nome').order('nome');
-  if (currentSocietaId) qg = qg.eq('societa_id', currentSocietaId);
+  let qg = sb.from('gruppo').select('id, nome, societa(nome)').order('nome');
+  if (atletaSocietaId) qg = qg.eq('societa_id', atletaSocietaId);
   if (currentStagioneId) qg = qg.eq('stagione_id', currentStagioneId);
   const { data: gruppi } = await qg;
   (gruppi||[]).forEach(g => { const o=document.createElement('option'); o.value=g.id; o.textContent=g.nome; selG.appendChild(o); });
 
-  // Se già iscritto carica il gruppo
+  // Mostra società rilevata
+  if (atletaSocietaNome) {
+    document.getElementById('ni-societa-info').textContent = '🏢 Società: ' + atletaSocietaNome;
+    document.getElementById('ni-societa-info').style.display = 'block';
+  } else {
+    document.getElementById('ni-societa-info').style.display = 'none';
+  }
+
+  // Se già iscritto pre-seleziona il gruppo
   if (isc) {
     const { data: ig } = await sb.from('iscrizione_gruppo').select('gruppo_id').eq('iscrizione_id', isc.id).maybeSingle();
     if (ig?.gruppo_id) selG.value = ig.gruppo_id;
@@ -7455,6 +7487,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
           <button class="btn btn-sm btn-secondary" onclick="document.getElementById('ni-step2').style.display='none';document.getElementById('ni-step1').style.display='block';" style="margin-left:auto">Cambia</button>
         </div>
         <div id="ni-isc-info" style="margin-bottom:16px"></div>
+        <div id="ni-societa-info" style="display:none;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;padding:6px 10px;background:rgba(26,111,255,0.06);border-radius:var(--radius);border:1px solid rgba(26,111,255,0.15)"></div>
         <div class="field">
           <label>Gruppo / Squadra</label>
           <select id="ni-gruppo"><option value="">— Nessun gruppo —</option></select>
