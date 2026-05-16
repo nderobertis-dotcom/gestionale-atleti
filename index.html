@@ -1326,7 +1326,7 @@ async function loadSection(section) {
 let editStagioneId = null;
 
 async function loadStagioni() {
-  const { data } = await sb.from('stagione').select('*').order('data_inizio', { ascending: false });
+  const { data } = await sb.from('stagione').select('*').order('anno_inizio', { ascending: false });
   const tbody = document.getElementById('tbody-stagioni');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📅</div><p>Nessuna stagione. Creane una con il bottone "+ Nuova stagione".</p></div></td></tr>';
@@ -1336,8 +1336,8 @@ async function loadStagioni() {
     const attiva = s.attiva;
     return '<tr' + (attiva ? ' style="background:rgba(26,111,255,0.04)"' : '') + '>' +
       '<td><strong>' + s.nome + '</strong></td>' +
-      '<td>' + (s.data_inizio ? formatData(s.data_inizio) : '—') + '</td>' +
-      '<td>' + (s.data_fine ? formatData(s.data_fine) : '—') + '</td>' +
+      '<td>' + (s.anno_inizio || '—') + '</td>' +
+      '<td>' + (s.anno_fine || '—') + '</td>' +
       '<td>' + (attiva
         ? '<span class="badge badge-green">✓ Attiva</span>'
         : '<button class="btn btn-sm btn-secondary" onclick="impostaStatgioneAttiva(&#39;' + s.id + '&#39;, &#39;' + s.nome.replace(/'/g, '') + '&#39;)">Imposta attiva</button>') + '</td>' +
@@ -1362,8 +1362,8 @@ async function apriModalStagione(id = null) {
     const { data: s } = await sb.from('stagione').select('*').eq('id', id).single();
     if (s) {
       document.getElementById('stag-nome').value = s.nome || '';
-      document.getElementById('stag-inizio').value = s.data_inizio || '';
-      document.getElementById('stag-fine').value = s.data_fine || '';
+      document.getElementById('stag-inizio').value = s.anno_inizio || '';
+      document.getElementById('stag-fine').value = s.anno_fine || '';
       document.getElementById('stag-note').value = s.note || '';
     }
   } else {
@@ -1371,8 +1371,8 @@ async function apriModalStagione(id = null) {
     const now = new Date();
     const y = now.getFullYear();
     document.getElementById('stag-nome').value = y + '/' + (y + 1);
-    document.getElementById('stag-inizio').value = y + '-09-01';
-    document.getElementById('stag-fine').value = (y + 1) + '-06-30';
+    document.getElementById('stag-inizio').value = String(y);
+    document.getElementById('stag-fine').value = String(y + 1);
   }
   apriModal('modal-stagione');
 }
@@ -1381,10 +1381,12 @@ async function salvaStagione() {
   const nome = document.getElementById('stag-nome').value.trim();
   if (!nome) { toast('Inserisci il nome della stagione', 'error'); return; }
 
+  const annoInizio = parseInt(document.getElementById('stag-inizio').value) || null;
+  const annoFine   = parseInt(document.getElementById('stag-fine').value) || null;
   const payload = {
     nome,
-    data_inizio: document.getElementById('stag-inizio').value || null,
-    data_fine:   document.getElementById('stag-fine').value || null,
+    anno_inizio: annoInizio,
+    anno_fine:   annoFine,
     note:        document.getElementById('stag-note').value.trim() || null,
   };
 
@@ -6334,12 +6336,12 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
-          <label>Data inizio</label>
-          <input type="date" id="stag-inizio">
+          <label>Anno inizio</label>
+          <input type="number" id="stag-inizio" placeholder="2026" min="2000" max="2100">
         </div>
         <div class="field">
-          <label>Data fine</label>
-          <input type="date" id="stag-fine">
+          <label>Anno fine</label>
+          <input type="number" id="stag-fine" placeholder="2027" min="2000" max="2100">
         </div>
       </div>
       <div class="field">
