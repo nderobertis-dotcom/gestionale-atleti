@@ -1718,14 +1718,17 @@ async function stampaSchedaAtleta() {
   toast('Preparazione PDF...', 'info');
 
   // Carica tutti i dati necessari
-  const [{ data: a }, { data: isc }, { data: docs }, { data: pags }] = await Promise.all([
+  const [{ data: a }, { data: isc }, { data: docs }] = await Promise.all([
     sb.from('atleta').select('*').eq('id', id).single(),
-    sb.from('iscrizione').select('stato, stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo(nome, societa(nome, telefono, email)))')
+    sb.from('iscrizione').select('id, stato, stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo(nome, societa(nome, telefono, email)))')
       .eq('atleta_id', id).eq('stagione_id', currentStagioneId).maybeSingle(),
     sb.from('documento').select('tipo, data_scadenza, data_emissione').eq('atleta_id', id),
-    sb.from('pagamento').select('tipo, importo, data_scadenza, pagato, numero_ricevuta')
-      .eq('iscrizione_id', isc?.id || '00000000-0000-0000-0000-000000000000').order('data_scadenza'),
   ]);
+  // Pagamenti richiedono isc.id — query separata
+  const { data: pags } = isc?.id
+    ? await sb.from('pagamento').select('tipo, importo, data_scadenza, pagato, numero_ricevuta')
+        .eq('iscrizione_id', isc.id).order('data_scadenza')
+    : { data: [] };
 
   if (!a) { toast('Dati atleta non trovati', 'error'); return; }
 
