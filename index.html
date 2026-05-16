@@ -1357,9 +1357,34 @@ async function loadAtleti() {
   const filtroTipo   = document.getElementById('filter-atleti-tipo')?.value || '';
   const filtroCert   = document.getElementById('filter-atleti-cert')?.value || '';
 
-  let { data, error } = await sb.from('atleta')
+  // Filtro per allenatore: recupera solo gli atleti dei gruppi assegnati
+  let atletaIdsFiltro = null;
+  if (currentProfilo?.ruolo === 'allenatore') {
+    const { data: gruppiAll } = await sb.from('allenatore_gruppo')
+      .select('gruppo_id').eq('profilo_id', currentProfilo.id);
+    if (gruppiAll && gruppiAll.length > 0) {
+      const gIds = gruppiAll.map(g => g.gruppo_id);
+      const { data: iscGruppi } = await sb.from('iscrizione_gruppo')
+        .select('iscrizione!inner(atleta_id)')
+        .in('gruppo_id', gIds);
+      atletaIdsFiltro = [...new Set((iscGruppi || []).map(r => r.iscrizione?.atleta_id).filter(Boolean))];
+    } else {
+      atletaIdsFiltro = []; // nessun gruppo assegnato → nessun atleta
+    }
+  }
+
+  let query2 = sb.from('atleta')
     .select('id, cognome, nome, data_nascita, maggiorenne, codice_fiscale, foto_url, iscrizione(stato, stagione_id, iscrizione_gruppo(gruppo(societa(nome)))), documento(tipo, data_scadenza)')
     .order('cognome');
+  if (atletaIdsFiltro !== null) {
+    if (atletaIdsFiltro.length === 0) {
+      document.getElementById('tbody-atleti').innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👤</div><p>Nessun atleta assegnato ai tuoi gruppi</p></div></td></tr>';
+      return;
+    }
+    query2 = query2.in('id', atletaIdsFiltro);
+  }
+
+  let { data, error } = await query2;
 
   if (error || !data) {
     document.getElementById('tbody-atleti').innerHTML = '<tr><td colspan="7">Errore caricamento</td></tr>';
@@ -1481,10 +1506,18 @@ async function apriAtleta(id) {
 // GENITORI
 // ============================================================
 async function loadGenitori() {
-  const { data } = await sb.from('genitore').select('*, atleta_genitore(atleta(cognome, nome))').order('cognome');
+  const search = document.getElementById('search-genitori')?.value?.toLowerCase() || '';
+  let { data } = await sb.from('genitore').select('*, atleta_genitore(atleta(cognome, nome))').order('cognome');
+  if (data && search) {
+    data = data.filter(g =>
+      g.cognome?.toLowerCase().includes(search) ||
+      g.nome?.toLowerCase().includes(search) ||
+      g.codice_fiscale?.toLowerCase().includes(search)
+    );
+  }
   const tbody = document.getElementById('tbody-genitori');
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👨‍👩‍👧</div><p>Nessun genitore registrato</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👨‍👩‍👧</div><p>Nessun genitore trovato</p></div></td></tr>';
     return;
   }
   tbody.innerHTML = data.map(g => {
@@ -1504,13 +1537,20 @@ async function loadGenitori() {
 // GRUPPI
 // ============================================================
 async function loadGruppi() {
+  const search = document.getElementById('search-gruppi')?.value?.toLowerCase() || '';
   let query = sb.from('gruppo')
     .select('id, nome, tipo, con_quota, note, societa(nome)')
     .order('nome');
   if (currentSocietaId) query = query.eq('societa_id', currentSocietaId);
   if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
 
-  const { data } = await query;
+  let { data } = await query;
+  if (data && search) {
+    data = data.filter(g =>
+      g.nome?.toLowerCase().includes(search) ||
+      g.societa?.nome?.toLowerCase().includes(search)
+    );
+  }
   const tbody = document.getElementById('tbody-gruppi');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👥</div><p>Nessun gruppo configurato. Creane uno con il bottone "+ Nuovo gruppo".</p></div></td></tr>';
@@ -1549,12 +1589,20 @@ async function loadGruppi() {
 // ISCRIZIONI
 // ============================================================
 async function loadIscrizioni() {
+  const search = document.getElementById('search-iscrizioni')?.value?.toLowerCase() || '';
   let query = sb.from('iscrizione')
     .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome)')
     .order('data_iscrizione', { ascending: false });
   if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
 
-  const { data } = await query;
+  let { data } = await query;
+  if (data && search) {
+    data = data.filter(i =>
+      i.atleta?.cognome?.toLowerCase().includes(search) ||
+      i.atleta?.nome?.toLowerCase().includes(search) ||
+      i.intestato_nome?.toLowerCase().includes(search)
+    );
+  }
   const tbody = document.getElementById('tbody-iscrizioni');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessuna iscrizione trovata</p></div></td></tr>';
@@ -1576,14 +1624,24 @@ async function loadIscrizioni() {
 // ============================================================
 async function loadPagamenti() {
   const filtro = document.getElementById('filter-pagamento-stato')?.value;
+  const search = document.getElementById('search-pagamenti')?.value?.toLowerCase() || '';
   let query = sb.from('pagamento')
     .select(`id, data_pagamento, data_scadenza, importo, tipo, metodo, pagato, numero_ricevuta, note,
-      iscrizione(atleta_id, intestato_nome, atleta(cognome, nome),
+      iscrizione!inner(atleta_id, intestato_nome, stagione_id, atleta(cognome, nome),
         iscrizione_gruppo(gruppo(societa_id, societa(nome))))`)
     .order('data_scadenza', { ascending: true });
+  if (currentStagioneId) query = query.eq('iscrizione.stagione_id', currentStagioneId);
   if (filtro !== '') query = query.eq('pagato', filtro === 'true');
 
-  const { data } = await query;
+  let { data } = await query;
+  if (data && search) {
+    data = data.filter(p => {
+      const nome = ((p.iscrizione?.atleta?.cognome || '') + ' ' + (p.iscrizione?.atleta?.nome || '')).toLowerCase();
+      return nome.includes(search) ||
+        (p.numero_ricevuta || '').toLowerCase().includes(search) ||
+        (p.iscrizione?.intestato_nome || '').toLowerCase().includes(search);
+    });
+  }
   const tbody = document.getElementById('tbody-pagamenti');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">💳</div><p>Nessun pagamento trovato</p></div></td></tr>';
@@ -1633,14 +1691,20 @@ async function loadPagamenti() {
 // ============================================================
 async function loadDocumenti() {
   const filtroTipo = document.getElementById('filter-doc-tipo')?.value;
+  const search = document.getElementById('search-documenti')?.value?.toLowerCase() || '';
 
-  // Carica atleti con i loro documenti
   let query = sb.from('documento')
     .select('id, tipo, file_path, file_nome, data_scadenza, valido, atleta_id, atleta(cognome, nome)')
     .order('data_scadenza');
   if (filtroTipo) query = query.eq('tipo', filtroTipo);
 
-  const { data } = await query;
+  let { data } = await query;
+  if (data && search) {
+    data = data.filter(d =>
+      d.atleta?.cognome?.toLowerCase().includes(search) ||
+      d.atleta?.nome?.toLowerCase().includes(search)
+    );
+  }
   const tbody = document.getElementById('tbody-documenti');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📄</div><p>Nessun documento trovato</p></div></td></tr>';
@@ -1839,6 +1903,11 @@ document.getElementById('menu-toggle').addEventListener('click', () => {
 // Filtri con debounce
 function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; }
 document.getElementById('search-atleti').addEventListener('input', debounce(loadAtleti, 300));
+document.getElementById('search-genitori')?.addEventListener('input', debounce(loadGenitori, 300));
+document.getElementById('search-gruppi')?.addEventListener('input', debounce(loadGruppi, 300));
+document.getElementById('search-iscrizioni')?.addEventListener('input', debounce(loadIscrizioni, 300));
+document.getElementById('search-pagamenti')?.addEventListener('input', debounce(loadPagamenti, 300));
+document.getElementById('search-documenti')?.addEventListener('input', debounce(loadDocumenti, 300));
 document.getElementById('btn-filter-atleti').addEventListener('click', () => {
   const panel = document.getElementById('panel-filter-atleti');
   const visible = panel.style.display === 'block';
