@@ -1276,6 +1276,47 @@ async function loadSection(section) {
   }
 }
 
+
+// ============================================================
+// FUNZIONI ELIMINA
+// ============================================================
+async function eliminaAtleta(id, nome) {
+  if (!confirm('Eliminare l\'atleta ' + nome + '?\nAttenzione: verranno eliminati anche iscrizioni, pagamenti e documenti collegati. Operazione non reversibile.')) return;
+  const { error } = await sb.from('atleta').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Atleta eliminato', 'success');
+  loadAtleti();
+  loadDashboard();
+}
+
+async function eliminaGruppo(id, nome) {
+  if (!confirm('Eliminare il gruppo "' + nome + '"?\nGli atleti assegnati verranno scollegati. Operazione non reversibile.')) return;
+  const { error } = await sb.from('gruppo').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Gruppo eliminato', 'success');
+  loadGruppi();
+}
+
+async function eliminaIscrizione(id, atletaNome) {
+  if (!confirm('Eliminare l\'iscrizione di ' + atletaNome + '?\nVerranno eliminate anche tutte le rate associate. Operazione non reversibile.')) return;
+  // Prima elimina i pagamenti collegati
+  await sb.from('pagamento').delete().eq('iscrizione_id', id);
+  const { error } = await sb.from('iscrizione').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Iscrizione eliminata', 'success');
+  loadIscrizioni();
+  loadPagamenti();
+  loadDashboard();
+}
+
+async function eliminaTariffa(id, nome) {
+  if (!confirm('Eliminare la tariffa "' + nome + '"?\nLe iscrizioni già create con questa tariffa non vengono modificate. Operazione non reversibile.')) return;
+  const { error } = await sb.from('tariffa').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'error'); return; }
+  toast('Tariffa eliminata', 'success');
+  loadTariffe();
+}
+
 // ============================================================
 // DASHBOARD
 // ============================================================
@@ -1287,12 +1328,17 @@ async function loadDashboard() {
   const grid = document.getElementById('stats-grid');
   grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-  const [atleti, iscrizioni, pagamentiScaduti, certScadenza] = await Promise.all([
-    sb.from('atleta').select('id', { count: 'exact', head: true }),
-    sb.from('iscrizione').select('id', { count: 'exact', head: true }).eq('stato', 'attiva'),
-    sb.from('v_rate_non_pagate').select('*', { count: 'exact', head: true }),
-    sb.from('v_certificati_in_scadenza').select('*', { count: 'exact', head: true }),
-  ]);
+  // Queries dashboard — filtrate per società se selezionata
+  let qAtleti = sb.from('atleta').select('id', { count: 'exact', head: true });
+  let qIscrizioni = sb.from('iscrizione').select('id', { count: 'exact', head: true }).eq('stato', 'attiva');
+  let qRate = sb.from('v_rate_non_pagate').select('*', { count: 'exact', head: true });
+  let qCert = sb.from('v_certificati_in_scadenza').select('*', { count: 'exact', head: true });
+  if (currentStagioneId) qIscrizioni = qIscrizioni.eq('stagione_id', currentStagioneId);
+  if (currentSocietaId) {
+    qRate = qRate.eq('societa_id', currentSocietaId);
+    qCert = qCert.eq('societa_id', currentSocietaId);
+  }
+  const [atleti, iscrizioni, pagamentiScaduti, certScadenza] = await Promise.all([qAtleti, qIscrizioni, qRate, qCert]);
 
   grid.innerHTML = `
     <div class="stat-card">
@@ -1314,7 +1360,9 @@ async function loadDashboard() {
   `;
 
   // Tabella certificati
-  const { data: certs } = await sb.from('v_certificati_in_scadenza').select('*').limit(10);
+  let qCerts = sb.from('v_certificati_in_scadenza').select('*').limit(10);
+  if (currentSocietaId) qCerts = qCerts.eq('societa_id', currentSocietaId);
+  const { data: certs } = await qCerts;
   const tcert = document.getElementById('table-certificati');
   if (!certs || certs.length === 0) {
     tcert.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Nessun certificato in scadenza nei prossimi 60 giorni</p></div>';
@@ -1330,7 +1378,9 @@ async function loadDashboard() {
   }
 
   // Tabella rate
-  const { data: rate } = await sb.from('v_rate_non_pagate').select('*').limit(10);
+  let qRateList = sb.from('v_rate_non_pagate').select('*').limit(10);
+  if (currentSocietaId) qRateList = qRateList.eq('societa_id', currentSocietaId);
+  const { data: rate } = await qRateList;
   const trate = document.getElementById('table-rate');
   if (!rate || rate.length === 0) {
     trate.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Nessuna rata scaduta</p></div>';
@@ -1484,7 +1534,7 @@ async function loadAtleti() {
         if (giorni <= 60) return '<span class="badge badge-yellow">' + giorni + ' gg</span>';
         return '<span class="badge badge-green">Valido</span>';
       })()}</td>
-       <td style='display:flex;gap:6px;'><button class="btn btn-sm btn-secondary" onclick="apriAtleta('${a.id}')">Apri</button>${(currentProfilo?.ruolo === 'amministratore' || currentProfilo?.ruolo === 'segreteria') ? '<button class="btn btn-sm btn-secondary" onclick="apriAttestazioneAtleta(\'' + a.id + '\', \'' + a.cognome + ' ' + a.nome + '\')" title="Attestazione">📜</button>' : ''}</td>
+       <td style='display:flex;gap:6px;flex-wrap:wrap;'><button class="btn btn-sm btn-secondary" onclick="apriAtleta('${a.id}')">Apri</button>${(currentProfilo?.ruolo === 'amministratore' || currentProfilo?.ruolo === 'segreteria') ? '<button class="btn btn-sm btn-secondary" onclick="apriAttestazioneAtleta(\'' + a.id + '\', \'' + a.cognome + ' ' + a.nome + '\')" title="Attestazione">📜</button>' : ''}${currentProfilo?.ruolo === 'amministratore' ? '<button class="btn btn-sm btn-danger" onclick="eliminaAtleta(\'' + a.id + '\', \'' + a.cognome + ' ' + a.nome + '\')" title="Elimina">🗑</button>' : ''}</td>
     </tr>`;
   }).join('');
 }
@@ -1578,8 +1628,9 @@ async function loadGruppi() {
       <td>${g.societa?.nome || '—'}</td>
       <td>${g.con_quota ? '<span class="badge badge-yellow">Sì</span>' : '<span class="badge badge-gray">No</span>'}</td>
       <td>${nAtleti}</td>
-      <td>
+      <td style="display:flex;gap:6px;">
         <button class="btn btn-sm btn-secondary" onclick="apriModalAssegna('${g.id}')">+ Atleta</button>
+        ${currentProfilo?.ruolo === 'amministratore' ? '<button class="btn btn-sm btn-danger" onclick="eliminaGruppo(\'' + g.id + '\', \'' + g.nome + '\')">🗑</button>' : ''}
       </td>
     </tr>`;
   }).join('');
@@ -1615,7 +1666,10 @@ async function loadIscrizioni() {
     <td>${i.intestato_nome || '—'}</td>
     <td><span class="badge ${i.stato === 'attiva' ? 'badge-green' : 'badge-gray'}">${i.stato}</span></td>
     <td>${formatData(i.data_iscrizione)}</td>
-    <td><button class="btn btn-sm btn-primary" onclick="apriModalIscrizione('${i.atleta_id}')">Tariffa / Rate</button></td>
+    <td style="display:flex;gap:6px;">
+      <button class="btn btn-sm btn-primary" onclick="apriModalIscrizione('${i.atleta_id}')">Tariffa / Rate</button>
+      ${currentProfilo?.ruolo === 'amministratore' ? '<button class="btn btn-sm btn-danger" onclick="eliminaIscrizione(\'' + i.id + '\', \'' + (i.atleta?.cognome||'') + ' ' + (i.atleta?.nome||'') + '\')">🗑</button>' : ''}
+    </td>
   </tr>`).join('');
 }
 
@@ -1769,7 +1823,10 @@ async function loadTariffe() {
       '<td><span class="badge badge-gray">' + (t.frequenza_rata || '—') + '</span></td>' +
       '<td style="font-family:var(--mono)">' + (t.numero_rate ?? 0) + '</td>' +
       '<td style="font-family:var(--mono);font-weight:600;">' + formatEuro(totale) + '</td>' +
-      '<td><button class="btn btn-sm btn-secondary" data-id="' + t.id + '" onclick="modificaTariffa(this)">Modifica</button></td>' +
+      '<td style="display:flex;gap:6px;">' +
+        '<button class="btn btn-sm btn-secondary" data-id="' + t.id + '" onclick="modificaTariffa(this)">Modifica</button>' +
+        (currentProfilo?.ruolo === 'amministratore' ? '<button class="btn btn-sm btn-danger" onclick="eliminaTariffa(\'' + t.id + '\', \'' + t.nome + '\')">🗑</button>' : '') +
+      '</td>' +
       '</tr>';
   }).join('');
 }
@@ -1917,10 +1974,9 @@ document.getElementById('btn-filter-atleti').addEventListener('click', () => {
 document.getElementById('filter-pagamento-stato').addEventListener('change', loadPagamenti);
 document.getElementById('filter-doc-tipo').addEventListener('change', loadDocumenti);
 
-// Bottoni nuovi record (placeholder)
-['btn-nuova-iscrizione','btn-nuovo-pagamento','btn-nuovo-documento'].forEach(id => {
-  document.getElementById(id)?.addEventListener('click', () => toast('Funzione in sviluppo', 'warning'));
-});
+// Bottone nuovo pagamento (placeholder — i pagamenti si generano dalle rate)
+document.getElementById('btn-nuovo-pagamento')?.addEventListener('click', () =>
+  toast('I pagamenti si generano dalla sezione Iscrizioni → Tariffa / Rate', 'warning'));
 
 document.getElementById('btn-salva-profilo')?.addEventListener('click', async () => {
   const { error } = await sb.from('profilo').update({
