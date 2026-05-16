@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v1.4</span>
+      <span class="release-badge" title="Versione attuale">v1.5</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1850,7 +1850,7 @@ async function loadAtleti() {
   }
 
   let query2 = sb.from('atleta')
-    .select('id, cognome, nome, data_nascita, maggiorenne, codice_fiscale, foto_url, iscrizione(stato, stagione_id, iscrizione_gruppo(gruppo(societa(nome)))), documento(tipo, data_scadenza)')
+    .select('id, cognome, nome, data_nascita, maggiorenne, codice_fiscale, foto_url, iscrizione(stato, stagione_id, iscrizione_gruppo(gruppo(societa_id, societa(nome)))), documento(tipo, data_scadenza)')
     .order('cognome');
   if (atletaIdsFiltro !== null) {
     if (atletaIdsFiltro.length === 0) {
@@ -1865,6 +1865,14 @@ async function loadAtleti() {
   if (error || !data) {
     document.getElementById('tbody-atleti').innerHTML = '<tr><td colspan="7">Errore caricamento</td></tr>';
     return;
+  }
+
+  // Filtro per società (lato client su iscrizioni)
+  if (data && currentSocietaId) {
+    data = data.filter(a => {
+      const isc = (a.iscrizione || []).find(i => i.stagione_id === currentStagioneId) || (a.iscrizione || [])[0];
+      return (isc?.iscrizione_gruppo || []).some(ig => ig.gruppo?.societa_id === currentSocietaId);
+    });
   }
 
   // Ricerca testuale
@@ -1983,7 +1991,16 @@ async function apriAtleta(id) {
 // ============================================================
 async function loadGenitori() {
   const search = document.getElementById('search-genitori')?.value?.toLowerCase() || '';
-  let { data } = await sb.from('genitore').select('*, atleta_genitore(atleta(cognome, nome))').order('cognome');
+  let { data } = await sb.from('genitore')
+    .select('*, atleta_genitore(atleta(cognome, nome, iscrizione(stagione_id, iscrizione_gruppo(gruppo(societa_id)))))')
+    .order('cognome');
+  // Filtro per società
+  if (data && currentSocietaId) {
+    data = data.filter(g => (g.atleta_genitore || []).some(ag => {
+      const isc = (ag.atleta?.iscrizione || []).find(i => i.stagione_id === currentStagioneId) || (ag.atleta?.iscrizione || [])[0];
+      return (isc?.iscrizione_gruppo || []).some(ig => ig.gruppo?.societa_id === currentSocietaId);
+    }));
+  }
   if (data && search) {
     data = data.filter(g =>
       g.cognome?.toLowerCase().includes(search) ||
@@ -2087,7 +2104,7 @@ async function loadIscrizioni() {
   const filtroStato  = document.getElementById('filter-iscrizioni-stato')?.value || '';
 
   let query = sb.from('iscrizione')
-    .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo_id, gruppo(nome))')
+    .select('id, data_iscrizione, stato, intestato_nome, atleta_id, atleta(cognome, nome), stagione(nome), tariffa(nome), iscrizione_gruppo(gruppo_id, gruppo(nome, societa_id))')
     .order('data_iscrizione', { ascending: false });
   if (currentStagioneId) query = query.eq('stagione_id', currentStagioneId);
   if (filtroStato) query = query.eq('stato', filtroStato);
@@ -2099,6 +2116,9 @@ async function loadIscrizioni() {
       i.atleta?.nome?.toLowerCase().includes(search) ||
       i.intestato_nome?.toLowerCase().includes(search)
     );
+  }
+  if (data && currentSocietaId) {
+    data = data.filter(i => (i.iscrizione_gruppo || []).some(ig => ig.gruppo?.societa_id === currentSocietaId));
   }
   if (data && filtroGruppo) {
     data = data.filter(i => (i.iscrizione_gruppo || []).some(ig => ig.gruppo_id === filtroGruppo));
@@ -2197,11 +2217,17 @@ async function loadDocumenti() {
   const search = document.getElementById('search-documenti')?.value?.toLowerCase() || '';
 
   let query = sb.from('documento')
-    .select('id, tipo, file_path, file_nome, data_scadenza, valido, atleta_id, atleta(cognome, nome)')
+    .select('id, tipo, file_path, file_nome, data_scadenza, valido, atleta_id, atleta(cognome, nome, iscrizione(stagione_id, iscrizione_gruppo(gruppo(societa_id))))')
     .order('data_scadenza');
   if (filtroTipo) query = query.eq('tipo', filtroTipo);
 
   let { data } = await query;
+  if (data && currentSocietaId) {
+    data = data.filter(d => {
+      const isc = (d.atleta?.iscrizione || []).find(i => i.stagione_id === currentStagioneId) || (d.atleta?.iscrizione || [])[0];
+      return (isc?.iscrizione_gruppo || []).some(ig => ig.gruppo?.societa_id === currentSocietaId);
+    });
+  }
   if (data && search) {
     data = data.filter(d =>
       d.atleta?.cognome?.toLowerCase().includes(search) ||
@@ -2284,9 +2310,16 @@ async function loadTariffe() {
 // UTENTI
 // ============================================================
 async function loadUtenti() {
-  const { data } = await sb.from('profilo')
+  let { data } = await sb.from('profilo')
     .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(cognome, nome))')
     .order('cognome');
+  // Filtro per società: mostra solo utenti della società selezionata (eccetto admin)
+  if (data && currentSocietaId) {
+    data = data.filter(u => {
+      if (u.ruolo === 'amministratore') return true;
+      return (u.segreteria_societa || []).some(ss => ss.societa_id === currentSocietaId);
+    });
+  }
   const tbody = document.getElementById('tbody-utenti');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🔐</div><p>Nessun utente trovato</p></div></td></tr>';
