@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v1.9</span>
+      <span class="release-badge" title="Versione attuale">v2.0</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -3704,24 +3704,28 @@ async function salvaGruppo() {
 // ASSEGNAZIONE ATLETA A GRUPPO
 // ============================================================
 async function apriModalAssegna(gruppoId = null) {
-  // Data default oggi
   document.getElementById('as-data').value = new Date().toISOString().split('T')[0];
   document.getElementById('as-principale').value = 'true';
+  document.getElementById('as-quota-info').style.display = 'none';
+  document.getElementById('as-importo-field').style.display = 'none';
 
-  // Popola gruppi
+  // Popola gruppi (tutti, non filtrati per società — l'atleta può essere in un gruppo di un'altra società)
   const selG = document.getElementById('as-gruppo');
   selG.innerHTML = '<option value="">— Seleziona gruppo —</option>';
-  let qGruppi = sb.from('gruppo').select('id, nome, societa(nome)').order('nome');
+  let qGruppi = sb.from('gruppo').select('id, nome, con_quota, societa(nome)').order('nome');
   if (currentStagioneId) qGruppi = qGruppi.eq('stagione_id', currentStagioneId);
-  if (currentSocietaId) qGruppi = qGruppi.eq('societa_id', currentSocietaId);
   const { data: gruppi } = await qGruppi;
   if (gruppi) gruppi.forEach(g => {
     const o = document.createElement('option');
     o.value = g.id;
     o.textContent = g.nome + ' — ' + (g.societa?.nome || '');
+    o.dataset.conQuota = g.con_quota ? '1' : '0';
     selG.appendChild(o);
   });
-  if (gruppoId) selG.value = gruppoId;
+  if (gruppoId) {
+    selG.value = gruppoId;
+    aggiornaNomesQuotaInfo();
+  }
 
   // Popola atleti
   const selA = document.getElementById('as-atleta');
@@ -3737,6 +3741,32 @@ async function apriModalAssegna(gruppoId = null) {
   apriModal('modal-assegna');
 }
 
+function aggiornaNomesQuotaInfo() {
+  const selG = document.getElementById('as-gruppo');
+  const opt = selG.options[selG.selectedIndex];
+  const conQuota = opt?.dataset?.conQuota === '1';
+  const infoEl = document.getElementById('as-quota-info');
+  const importoEl = document.getElementById('as-importo-field');
+  if (!opt || !opt.value) {
+    infoEl.style.display = 'none';
+    importoEl.style.display = 'none';
+    return;
+  }
+  if (conQuota) {
+    infoEl.innerHTML = '💳 Questo gruppo prevede una <strong>quota mensile</strong>. Inserisci l\'importo della rata per generare le mensilità dal mese corrente fino a giugno.';
+    infoEl.style.background = 'rgba(26,111,255,0.06)';
+    infoEl.style.borderColor = 'rgba(26,111,255,0.2)';
+    infoEl.style.display = 'block';
+    importoEl.style.display = 'block';
+  } else {
+    infoEl.innerHTML = 'ℹ️ Questo gruppo <strong>non prevede quota mensile</strong>. L\'associazione verrà registrata senza generare rate aggiuntive.';
+    infoEl.style.background = 'rgba(26,158,106,0.06)';
+    infoEl.style.borderColor = 'rgba(26,158,106,0.2)';
+    infoEl.style.display = 'block';
+    importoEl.style.display = 'none';
+  }
+}
+
 function chiudiModalAssegna() {
   document.getElementById('modal-assegna').classList.remove('open');
 }
@@ -3744,46 +3774,71 @@ function chiudiModalAssegna() {
 async function salvaAssegnazione() {
   const gruppoId = document.getElementById('as-gruppo').value;
   const atletaId = document.getElementById('as-atleta').value;
+  const selG     = document.getElementById('as-gruppo');
+  const opt      = selG.options[selG.selectedIndex];
+  const conQuota = opt?.dataset?.conQuota === '1';
+  const importoRata = parseFloat(document.getElementById('as-importo-rata')?.value) || 0;
+
   if (!gruppoId) { toast('Seleziona un gruppo', 'error'); return; }
   if (!atletaId) { toast('Seleziona un atleta', 'error'); return; }
+  if (conQuota && importoRata <= 0) { toast('Inserisci l\'importo della rata mensile', 'error'); return; }
 
-  // Trova l'iscrizione dell'atleta nella stagione attiva
-  const { data: isc } = await sb.from('iscrizione')
-    .select('id')
-    .eq('atleta_id', atletaId)
-    .eq('stagione_id', currentStagioneId)
-    .single();
+  const btn = document.querySelector('#modal-assegna .btn-primary');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
 
-  if (!isc) {
-    toast('L\'atleta non ha un\'iscrizione nella stagione attiva. Registralo prima.', 'error');
-    return;
+  try {
+    const { data: isc } = await sb.from('iscrizione')
+      .select('id').eq('atleta_id', atletaId).eq('stagione_id', currentStagioneId).maybeSingle();
+    if (!isc) { toast("L'atleta non ha un'iscrizione nella stagione attiva. Registralo prima.", 'error'); return; }
+
+    const { data: existing } = await sb.from('iscrizione_gruppo')
+      .select('id').eq('iscrizione_id', isc.id).eq('gruppo_id', gruppoId).maybeSingle();
+    if (existing) { toast("L'atleta è già assegnato a questo gruppo", 'error'); return; }
+
+    const { data: altriGruppi } = await sb.from('iscrizione_gruppo').select('id').eq('iscrizione_id', isc.id);
+    const isPrincipale = !altriGruppi || altriGruppi.length === 0;
+
+    const { error: errIG } = await sb.from('iscrizione_gruppo').insert({
+      iscrizione_id: isc.id,
+      gruppo_id: gruppoId,
+      data_assegnazione: document.getElementById('as-data').value,
+      principale: isPrincipale,
+    });
+    if (errIG) throw new Error(errIG.message);
+
+    const gruppoNome = opt.textContent.split(' — ')[0];
+
+    if (conQuota && importoRata > 0) {
+      const dataInizio = document.getElementById('as-data').value;
+      const scadenze = calcolaScadenze(dataInizio, 'mensile', 0);
+      const pagamenti = scadenze.map(s => ({
+        iscrizione_id: isc.id,
+        data_scadenza: s,
+        importo: importoRata,
+        tipo: 'rata',
+        pagato: false,
+        note: 'Gruppo: ' + gruppoNome,
+      }));
+      if (pagamenti.length > 0) {
+        const { error: errP } = await sb.from('pagamento').insert(pagamenti);
+        if (errP) throw new Error('Associazione creata ma errore nelle rate: ' + errP.message);
+      }
+      toast('Atleta assegnato a ' + gruppoNome + ' — ' + pagamenti.length + ' rate mensili generate!', 'success');
+    } else {
+      toast('Atleta assegnato a ' + gruppoNome + (isPrincipale ? ' (principale)' : ' (secondario — nessuna rata aggiuntiva)'), 'success');
+    }
+
+    chiudiModalAssegna();
+    loadGruppi();
+    loadAtleti();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '✔ Assegna';
   }
-
-  // Controlla se già assegnato a questo gruppo
-  const { data: existing } = await sb.from('iscrizione_gruppo')
-    .select('iscrizione_id')
-    .eq('iscrizione_id', isc.id)
-    .eq('gruppo_id', gruppoId)
-    .single();
-
-  if (existing) {
-    toast('L\'atleta è già assegnato a questo gruppo', 'error');
-    return;
-  }
-
-  const { error } = await sb.from('iscrizione_gruppo').insert({
-    iscrizione_id: isc.id,
-    gruppo_id: gruppoId,
-    data_assegnazione: document.getElementById('as-data').value,
-    principale: document.getElementById('as-principale').value === 'true',
-  });
-
-  if (error) { toast('Errore: ' + error.message, 'error'); return; }
-  toast('Atleta assegnato al gruppo!', 'success');
-  chiudiModalAssegna();
-  loadGruppi();
-  loadAtleti();
 }
+
+
 
 
 // ============================================================
@@ -6647,9 +6702,17 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-body">
       <div class="field">
         <label>Gruppo *</label>
-        <select id="as-gruppo" style="font-size:14px;padding:10px 12px;">
+        <select id="as-gruppo" style="font-size:14px;padding:10px 12px;" onchange="aggiornaNomesQuotaInfo()">
           <option value="">— Seleziona gruppo —</option>
         </select>
+      </div>
+      <!-- Info quota gruppo -->
+      <div id="as-quota-info" style="display:none;font-size:13px;padding:10px 14px;border-radius:var(--radius);border:1px solid;margin-bottom:12px;"></div>
+      <!-- Importo rata (visibile solo se con_quota) -->
+      <div class="field" id="as-importo-field" style="display:none;">
+        <label>Importo rata mensile (€) *</label>
+        <input type="number" id="as-importo-rata" placeholder="Es. 30.00" min="0" step="0.01">
+        <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">Le rate verranno generate dal mese di assegnazione fino a giugno</small>
       </div>
       <div class="field">
         <label>Atleta *</label>
@@ -6658,20 +6721,14 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         </select>
       </div>
       <div class="field">
-        <label>Gruppo principale?</label>
-        <select id="as-principale">
-          <option value="true">Sì — gruppo principale</option>
-          <option value="false">No — gruppo secondario</option>
-        </select>
-      </div>
-      <div class="field">
         <label>Data assegnazione</label>
         <input type="date" id="as-data">
       </div>
+      <input type="hidden" id="as-principale" value="true">
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModalAssegna()">Annulla</button>
-      <button class="btn btn-primary" onclick="salvaAssegnazione()">💾 Assegna</button>
+      <button class="btn btn-primary" onclick="salvaAssegnazione()">✔ Assegna</button>
     </div>
   </div>
 </div>
