@@ -2774,8 +2774,9 @@ async function loadGruppi() {
       <td>${g.societa?.nome || '—'}</td>
       <td>${g.con_quota ? '<span class="badge badge-yellow">Sì</span>' : '<span class="badge badge-gray">No</span>'}</td>
       <td>${nAtleti}</td>
-      <td style="display:flex;gap:6px;">
+      <td style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-sm btn-secondary" onclick="apriModalAssegna('${g.id}')">+ Atleta</button>
+        <button class="btn btn-sm btn-secondary" onclick="apriModalGruppo('${g.id}')">✏️ Modifica</button>
         ${currentProfilo?.ruolo === 'amministratore' ? '<button class="btn btn-sm btn-danger" onclick="eliminaGruppo(\'' + g.id + '\', \'' + g.nome + '\')">🗑</button>' : ''}
       </td>
     </tr>`;
@@ -3603,15 +3604,20 @@ async function apriSchedaGenitore(id) {
 // ============================================================
 // GRUPPI / SQUADRE
 // ============================================================
-async function apriModalGruppo() {
+let editGruppoId = null;
+
+async function apriModalGruppo(id = null) {
+  editGruppoId = id;
   document.getElementById('gr-nome').value = '';
   document.getElementById('gr-note').value = '';
   document.getElementById('gr-tipo').value = 'giovanile';
   document.getElementById('gr-quota').value = 'false';
+  document.getElementById('gr-modal-title').textContent = id ? 'Modifica gruppo' : 'Nuovo gruppo';
 
   // Popola società
   const sel = document.getElementById('gr-societa');
   sel.innerHTML = '<option value="">— Seleziona società —</option>';
+  sel.disabled = false;
   if (currentProfilo?.ruolo === 'segreteria') {
     const { data } = await sb.from('segreteria_societa').select('societa(id, nome)').eq('profilo_id', currentUser.id);
     if (data) data.forEach(r => {
@@ -3635,8 +3641,20 @@ async function apriModalGruppo() {
     if (st) document.getElementById('gr-stagione-label').value = st.nome;
   }
 
-  // Pre-seleziona società dalla sidebar se filtrata
-  if (currentSocietaId) sel.value = currentSocietaId;
+  if (id) {
+    // Carica dati gruppo esistente
+    const { data: g } = await sb.from('gruppo').select('*').eq('id', id).single();
+    if (g) {
+      document.getElementById('gr-nome').value = g.nome || '';
+      document.getElementById('gr-tipo').value = g.tipo || 'giovanile';
+      document.getElementById('gr-quota').value = g.con_quota ? 'true' : 'false';
+      document.getElementById('gr-note').value = g.note || '';
+      sel.value = g.societa_id || '';
+    }
+  } else {
+    // Pre-seleziona società dalla sidebar se filtrata
+    if (currentSocietaId) sel.value = currentSocietaId;
+  }
 
   apriModal('modal-gruppo');
 }
@@ -3651,21 +3669,35 @@ async function salvaGruppo() {
   const nome = document.getElementById('gr-nome').value.trim().toUpperCase();
   if (!societa) { toast('Seleziona una società', 'error'); return; }
   if (!nome) { toast('Inserisci il nome del gruppo', 'error'); return; }
-  if (!currentStagioneId) { toast('Nessuna stagione attiva configurata', 'error'); return; }
+  if (!currentStagioneId && !editGruppoId) { toast('Nessuna stagione attiva configurata', 'error'); return; }
 
-  const { error } = await sb.from('gruppo').insert({
+  const payload = {
     societa_id: societa,
-    stagione_id: currentStagioneId,
     nome: nome,
     tipo: document.getElementById('gr-tipo').value,
     con_quota: document.getElementById('gr-quota').value === 'true',
     note: document.getElementById('gr-note').value.trim() || null,
-  });
+  };
 
-  if (error) { toast('Errore: ' + error.message, 'error'); return; }
-  toast('Gruppo creato con successo!', 'success');
-  chiudiModalGruppo();
-  loadGruppi();
+  const btn = document.querySelector('#modal-gruppo .btn-primary');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
+
+  try {
+    let error;
+    if (editGruppoId) {
+      ({ error } = await sb.from('gruppo').update(payload).eq('id', editGruppoId));
+    } else {
+      ({ error } = await sb.from('gruppo').insert({ ...payload, stagione_id: currentStagioneId }));
+    }
+    if (error) throw new Error(error.message);
+    toast(editGruppoId ? 'Gruppo aggiornato!' : 'Gruppo creato!', 'success');
+    chiudiModalGruppo();
+    loadGruppi();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Salva gruppo';
+  }
 }
 
 // ============================================================
@@ -6558,7 +6590,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
 <div class="modal-overlay" id="modal-gruppo">
   <div class="modal" style="max-width:520px;overflow-y:auto;max-height:90vh">
     <div class="modal-header">
-      <div class="modal-title">Nuovo gruppo / squadra</div>
+      <div class="modal-title" id="gr-modal-title">Nuovo gruppo / squadra</div>
       <button class="modal-close" onclick="chiudiModalGruppo()">✕</button>
     </div>
     <div class="modal-body">
