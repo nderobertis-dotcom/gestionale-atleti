@@ -1340,11 +1340,11 @@ async function loadStagioni() {
       '<td>' + (s.data_fine ? formatData(s.data_fine) : '—') + '</td>' +
       '<td>' + (attiva
         ? '<span class="badge badge-green">✓ Attiva</span>'
-        : '<button class="btn btn-sm btn-secondary" onclick="impostaStatgioneAttiva('' + s.id + '', '' + s.nome + '')">Imposta attiva</button>') + '</td>' +
+        : '<button class="btn btn-sm btn-secondary" onclick="impostaStatgioneAttiva(&#39;' + s.id + '&#39;, &#39;' + s.nome.replace(/'/g, '') + '&#39;)">Imposta attiva</button>') + '</td>' +
       '<td><span style="color:var(--text3);font-size:13px">' + (s.note || '—') + '</span></td>' +
       '<td style="display:flex;gap:6px;">' +
-        '<button class="btn btn-sm btn-secondary" onclick="apriModalStagione('' + s.id + '')">Modifica</button>' +
-        (!attiva ? '<button class="btn btn-sm btn-danger" onclick="eliminaStagione('' + s.id + '', '' + s.nome + '')">🗑</button>' : '') +
+        '<button class="btn btn-sm btn-secondary" onclick="apriModalStagione(&#39;' + s.id + '&#39;)">Modifica</button>' +
+        (!attiva ? '<button class="btn btn-sm btn-danger" onclick="eliminaStagione(&#39;' + s.id + '&#39;, &#39;' + s.nome.replace(/'/g,'') + '&#39;)">🗑</button>' : '') +
       '</td>' +
     '</tr>';
   }).join('');
