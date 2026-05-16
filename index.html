@@ -1390,9 +1390,7 @@ async function salvaStagione() {
   const annoInizio = parseInt(document.getElementById('stag-inizio').value) || null;
   const annoFine   = parseInt(document.getElementById('stag-fine').value) || null;
   if (!annoInizio) { toast('Inserisci l\'anno di inizio', 'error'); return; }
-  const nomeCalcolato = annoInizio + (annoFine ? '/' + annoFine : '');
   const payload = {
-    nome: nomeCalcolato,
     anno_inizio: annoInizio,
     anno_fine:   annoFine,
     note:        document.getElementById('stag-note').value.trim() || null,
@@ -6340,11 +6338,11 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-body">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
-          <label>Anno inizio *</label>
+          <label>Anno di inizio stagione *</label>
           <input type="number" id="stag-inizio" placeholder="2026" min="2000" max="2100" oninput="aggiornaNomeStagione()">
         </div>
         <div class="field">
-          <label>Anno fine</label>
+          <label>Anno di fine stagione</label>
           <input type="number" id="stag-fine" placeholder="2027" min="2000" max="2100" oninput="aggiornaNomeStagione()">
         </div>
       </div>
@@ -6357,7 +6355,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <textarea id="stag-note" placeholder="Eventuali note sulla stagione..." style="min-height:60px"></textarea>
       </div>
       <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.2);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);margin-top:4px;">
-        ℹ️ Per attivare una stagione usa il tasto <strong>"Imposta attiva"</strong> dalla tabella. Solo una stagione può essere attiva alla volta.
+        ℹ️ Esempio: stagione 2026/2027 → anno inizio <strong>2026</strong>, anno fine <strong>2027</strong> (settembre–giugno). Per attivarla usa il tasto <strong>"Imposta attiva"</strong> dalla tabella.
       </div>
     </div>
     <div class="modal-footer">
