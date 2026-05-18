@@ -3597,11 +3597,14 @@ async function salvaAtleta() {
   const v = id => document.getElementById(id)?.value?.trim() || null;
 
   try {
-    // 1. Inserisci atleta
-    const { data: atleta, error: e1 } = await sb.from('atleta').insert({
+    // 1. Inserisci atleta (gestisce duplicato CF)
+    let atleta = null;
+    const cfInput = v('a-cf')?.toUpperCase();
+
+    const { data: atletaNew, error: e1 } = await sb.from('atleta').insert({
       nome: v('a-nome')?.toUpperCase(),
       cognome: v('a-cognome')?.toUpperCase(),
-      codice_fiscale: v('a-cf')?.toUpperCase(),
+      codice_fiscale: cfInput,
       data_nascita: v('a-nascita'),
       sesso: document.getElementById('a-sesso')?.value || null,
       comune_nascita: v('a-comune-nascita')?.toUpperCase(),
@@ -3614,7 +3617,22 @@ async function salvaAtleta() {
       email: v('a-email'),
       note: v('a-note'),
     }).select().single();
-    if (e1) throw new Error(e1.message);
+
+    if (e1) {
+      // Duplicato CF — cerca atleta esistente e collega
+      if (e1.message.includes('duplicate key') || e1.code === '23505') {
+        if (!cfInput) throw new Error(e1.message);
+        const { data: esistente } = await sb.from('atleta')
+          .select('id, cognome, nome').eq('codice_fiscale', cfInput).maybeSingle();
+        if (!esistente) throw new Error(e1.message);
+        atleta = esistente;
+        toast('Atleta già presente in anagrafica — collegamento al genitore aggiornato', 'warning');
+      } else {
+        throw new Error(e1.message);
+      }
+    } else {
+      atleta = atletaNew;
+    }
 
     // 2. Crea iscrizione alla stagione attiva
     if (currentStagioneId) {
@@ -3635,33 +3653,63 @@ async function salvaAtleta() {
 
     // 3. Genitori (se minorenne)
     if (maMinorenne) {
-      const { data: g1, error: e2 } = await sb.from('genitore').insert({
+      let g1 = null;
+      const g1cf = v('g1-cf')?.toUpperCase();
+      const { data: g1New, error: e2 } = await sb.from('genitore').insert({
         nome: v('g1-nome')?.toUpperCase(),
         cognome: v('g1-cognome')?.toUpperCase(),
-        codice_fiscale: v('g1-cf')?.toUpperCase(),
+        codice_fiscale: g1cf,
         telefono: v('g1-telefono'),
         email: v('g1-email'),
         indirizzo: v('g1-indirizzo')?.toUpperCase(),
       }).select().single();
-      if (e2) throw new Error(e2.message);
+      if (e2) {
+        if ((e2.message.includes('duplicate key') || e2.code === '23505') && g1cf) {
+          const { data: g1Es } = await sb.from('genitore')
+            .select('id').eq('codice_fiscale', g1cf).maybeSingle();
+          if (!g1Es) throw new Error(e2.message);
+          g1 = g1Es;
+          toast('Genitore già presente in anagrafica — collegamento aggiornato', 'warning');
+        } else {
+          throw new Error(e2.message);
+        }
+      } else {
+        g1 = g1New;
+      }
 
-      await sb.from('atleta_genitore').insert({
-        atleta_id: atleta.id,
-        genitore_id: g1.id,
-        relazione: document.getElementById('g1-relazione')?.value,
-        referente_principale: true,
-      });
+      // Evita duplicato atleta_genitore
+      const { data: agEsiste } = await sb.from('atleta_genitore')
+        .select('id').eq('atleta_id', atleta.id).eq('genitore_id', g1.id).maybeSingle();
+      if (!agEsiste) {
+        await sb.from('atleta_genitore').insert({
+          atleta_id: atleta.id,
+          genitore_id: g1.id,
+          relazione: document.getElementById('g1-relazione')?.value,
+          referente_principale: true,
+        });
+      }
 
       const g2c = v('g2-cognome'), g2n = v('g2-nome');
       if (g2c && g2n) {
-        const { data: g2 } = await sb.from('genitore').insert({
+        const g2cf = v('g2-cf')?.toUpperCase();
+        let g2 = null;
+        const { data: g2New, error: e3 } = await sb.from('genitore').insert({
           nome: g2n.toUpperCase(),
           cognome: g2c.toUpperCase(),
-          codice_fiscale: v('g2-cf')?.toUpperCase(),
+          codice_fiscale: g2cf,
           telefono: v('g2-telefono'),
           email: v('g2-email'),
           indirizzo: v('g2-indirizzo')?.toUpperCase(),
         }).select().single();
+        if (e3) {
+          if ((e3.message.includes('duplicate key') || e3.code === '23505') && g2cf) {
+            const { data: g2Es } = await sb.from('genitore')
+              .select('id').eq('codice_fiscale', g2cf).maybeSingle();
+            g2 = g2Es || null;
+          }
+        } else {
+          g2 = g2New;
+        }
         if (g2) await sb.from('atleta_genitore').insert({
           atleta_id: atleta.id,
           genitore_id: g2.id,
