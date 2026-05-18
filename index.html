@@ -3777,9 +3777,14 @@ async function apriSchedaGenitore(id) {
       sezione('Atleti collegati', figliHtml) +
       sezione('Accesso piattaforma', accountHtml);
 
-    document.getElementById('scheda-genitore-modifica').onclick = () => {
+    document.getElementById('scheda-genitore-modifica').onclick = async () => {
       chiudiModal('modal-scheda-genitore');
-      apriModalGenitore(id);
+      try {
+        await apriModalGenitore(id);
+      } catch(err) {
+        toast('Errore apertura modifica: ' + err.message, 'error');
+        console.error('apriModalGenitore error:', err);
+      }
     };
 
     apriModal('modal-scheda-genitore');
