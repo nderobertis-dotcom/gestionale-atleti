@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.1</span>
+      <span class="release-badge" title="Versione attuale">v2.2</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -5892,6 +5892,32 @@ function copiaCredSeg() {
 // ============================================================
 let editGenitoreId = null;
 
+
+function genFiltroAtleti() {
+  const q = document.getElementById('gen-cerca-atleta').value.toLowerCase();
+  const lista = document.getElementById('gen-atleti-lista');
+  if (!q || q.length < 1) { lista.innerHTML = ''; return; }
+  const filtered = (window._genAtletiAll || []).filter(a =>
+    a.cognome?.toLowerCase().includes(q) || a.nome?.toLowerCase().includes(q)
+  ).slice(0, 8);
+  if (filtered.length === 0) {
+    lista.innerHTML = '<div style="padding:8px 12px;color:var(--text3);font-size:13px">Nessun atleta trovato</div>';
+    return;
+  }
+  lista.innerHTML = filtered.map(a => {
+    const gia = window._genAtletiSel && window._genAtletiSel[a.id] ? ' ✓' : '';
+    return '<div data-id="' + a.id + '" data-cog="' + (a.cognome||'') + '" data-nom="' + (a.nome||'') + '" onclick="genSelezionaAtleta(this.dataset.id,this.dataset.cog,this.dataset.nom)" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"><strong>' + a.cognome + '</strong> ' + a.nome + '<span style="color:var(--green);font-size:11px">' + gia + '</span></div>';
+  }).join('');
+}
+
+function genSelezionaAtleta(id, cognome, nome) {
+  if (!window._genAtletiSel) window._genAtletiSel = {};
+  window._genAtletiSel[id] = { id, cognome, nome };
+  window.genRenderSelezionati();
+  document.getElementById('gen-cerca-atleta').value = '';
+  document.getElementById('gen-atleti-lista').innerHTML = '';
+}
+
 async function apriModalGenitore(id = null) {
   editGenitoreId = id;
   document.getElementById('modal-genitore-title').textContent = id ? 'Modifica genitore' : 'Nuovo genitore';
@@ -5904,16 +5930,39 @@ async function apriModalGenitore(id = null) {
   document.getElementById('gen-relazione').value = 'genitore';
   document.getElementById('gen-referente').checked = false;
 
-  // Popola select atleti
-  const sel = document.getElementById('gen-atleta');
-  sel.innerHTML = '';
+  // Carica atleti in memoria per la ricerca
   const { data: atleti } = await sb.from('atleta').select('id, cognome, nome').order('cognome');
-  if (atleti) atleti.forEach(a => {
-    const o = document.createElement('option');
-    o.value = a.id;
-    o.textContent = a.cognome + ' ' + a.nome;
-    sel.appendChild(o);
-  });
+  window._genAtletiAll = atleti || [];
+
+  // Reset UI nuova
+  document.getElementById('gen-cerca-atleta').value = '';
+  document.getElementById('gen-atleti-lista').innerHTML = '';
+  document.getElementById('gen-atleti-selezionati').innerHTML = '';
+  document.getElementById('gen-atleta').innerHTML = '';
+  window._genAtletiSel = {}; // {id: {id, cognome, nome}}
+
+  // Funzione helper per renderizzare i selezionati
+  window.genRenderSelezionati = function() {
+    const container = document.getElementById('gen-atleti-selezionati');
+    const sel = document.getElementById('gen-atleta');
+    sel.innerHTML = '';
+    container.innerHTML = Object.values(window._genAtletiSel).map(a =>
+      '<div style="display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border-radius:100px;padding:4px 10px;font-size:12px;font-weight:600;">'
+      + a.cognome + ' ' + a.nome
+      + '<span data-rid="' + a.id + '" onclick="genRimuoviAtleta(this.dataset.rid)" style="cursor:pointer;opacity:0.8;font-size:14px;line-height:1">&times;</span>'
+      + '</div>'
+    ).join('');
+    Object.values(window._genAtletiSel).forEach(a => {
+      const o = document.createElement('option');
+      o.value = a.id; o.selected = true;
+      sel.appendChild(o);
+    });
+  };
+
+  window.genRimuoviAtleta = function(aid) {
+    delete window._genAtletiSel[aid];
+    window.genRenderSelezionati();
+  };
 
   // Se modifica, carica dati esistenti
   if (id) {
@@ -5928,14 +5977,16 @@ async function apriModalGenitore(id = null) {
       document.getElementById('gen-comune').value = g.comune || '';
       document.getElementById('gen-provincia').value = g.provincia || '';
     }
-    // Seleziona atleti già collegati
     const { data: figli } = await sb.from('atleta_genitore').select('atleta_id, relazione, referente_principale').eq('genitore_id', id);
     if (figli && figli.length > 0) {
       document.getElementById('gen-relazione').value = figli[0].relazione || 'genitore';
       document.getElementById('gen-referente').checked = figli[0].referente_principale || false;
-      Array.from(sel.options).forEach(o => {
-        if (figli.find(f => f.atleta_id === o.value)) o.selected = true;
+      // Pre-popola atleti selezionati
+      figli.forEach(f => {
+        const a = (atleti || []).find(x => x.id === f.atleta_id);
+        if (a) window._genAtletiSel[a.id] = a;
       });
+      window.genRenderSelezionati();
     }
   }
 
@@ -6584,11 +6635,15 @@ function generaHtmlAttestazione(d) {
 
       <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Atleti collegati</div>
       <div class="field">
-        <label>Seleziona atleta/i</label>
-        <select id="gen-atleta" multiple style="height:100px">
-        </select>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Tieni premuto Ctrl per selezionare più atleti</div>
+        <label>Cerca e aggiungi atleta</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="gen-cerca-atleta" placeholder="Nome o cognome..." oninput="genFiltroAtleti()" autocomplete="off" style="flex:1">
+        </div>
+        <div id="gen-atleti-lista" style="margin-top:8px;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);"></div>
+        <div id="gen-atleti-selezionati" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;"></div>
       </div>
+      <!-- Hidden select per compatibilità con salvaGenitore -->
+      <select id="gen-atleta" multiple style="display:none"></select>
       <div class="field">
         <label>Relazione</label>
         <select id="gen-relazione">
