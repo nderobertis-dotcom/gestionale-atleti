@@ -7623,11 +7623,12 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
 
       <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Atleti collegati</div>
       <div class="field">
-        <label>Seleziona atleta/i</label>
-        <select id="gen-atleta" multiple style="height:100px">
-        </select>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Tieni premuto Ctrl per selezionare più atleti</div>
+        <label>Cerca e aggiungi atleta</label>
+        <input type="text" id="gen-cerca-atleta" placeholder="Nome o cognome..." oninput="genFiltroAtleti()" autocomplete="off">
+        <div id="gen-atleti-lista" style="margin-top:6px;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);"></div>
+        <div id="gen-atleti-selezionati" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;min-height:24px;"></div>
       </div>
+      <select id="gen-atleta" multiple style="display:none"></select>
       <div class="field">
         <label>Relazione</label>
         <select id="gen-relazione">
