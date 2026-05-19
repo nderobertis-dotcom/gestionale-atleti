@@ -702,7 +702,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.6</span>
+      <span class="release-badge" title="Versione attuale">v2.7</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1324,6 +1324,13 @@ tbody tr:last-child { border-bottom: none; }
           <div class="field"><label>Nuova password</label><input type="password" id="profilo-pw1"></div>
           <div class="field"><label>Conferma password</label><input type="password" id="profilo-pw2"></div>
           <button class="btn btn-secondary" id="btn-cambia-pw">Aggiorna password</button>
+        </div>
+        <!-- Card crediti — visibile solo a segreteria -->
+        <div class="card" style="max-width:480px;margin-top:16px;display:none" id="card-crediti-profilo">
+          <div class="card-header"><div class="card-title">💳 Crediti tesserato.club</div></div>
+          <div id="crediti-profilo-content">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
         </div>
       </div>
 
@@ -4032,10 +4039,66 @@ async function loadUtenti() {
 // ============================================================
 function loadProfilo() {
   if (!currentProfilo) return;
-  document.getElementById('profilo-nome').value = currentProfilo.nome || '';
+  document.getElementById('profilo-nome').value    = currentProfilo.nome || '';
   document.getElementById('profilo-cognome').value = currentProfilo.cognome || '';
-  document.getElementById('profilo-email').value = currentUser?.email || '';
-  document.getElementById('profilo-ruolo').value = currentProfilo.ruolo || '';
+  document.getElementById('profilo-email').value   = currentUser?.email || '';
+  document.getElementById('profilo-ruolo').value   = currentProfilo.ruolo || '';
+
+  // Mostra crediti solo per segreteria
+  const cardCrediti = document.getElementById('card-crediti-profilo');
+  if (currentProfilo.ruolo === 'segreteria' && cardCrediti) {
+    cardCrediti.style.display = 'block';
+    caricaCreditiProfilo();
+  }
+}
+
+async function caricaCreditiProfilo() {
+  const el = document.getElementById('crediti-profilo-content');
+  if (!el) return;
+
+  const { data: ss } = await sb.from('segreteria_societa')
+    .select('societa_id, societa(nome)').eq('profilo_id', currentUser.id).maybeSingle();
+  if (!ss) {
+    el.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:8px">Nessuna società associata.</p>';
+    return;
+  }
+
+  const { data: ab } = await sb.from('abbonamento')
+    .select('crediti_totali, crediti_usati, stato, scade_il, stagione(nome)')
+    .eq('societa_id', ss.societa_id)
+    .eq('stagione_id', currentStagioneId)
+    .maybeSingle();
+
+  if (!ab) {
+    el.innerHTML = '<div style="padding:8px">'
+      + '<p style="color:var(--text3);font-size:13px">Nessun abbonamento attivo per la stagione corrente.</p>'
+      + '<div style="margin-top:8px;background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:10px 14px;font-size:13px;">'
+      + "⚠ Per attivare o rinnovare l'abbonamento contatta l'amministratore.</div></div>";
+    return;
+  }
+
+  const liberi = ab.crediti_totali - ab.crediti_usati;
+  const perc   = ab.crediti_totali > 0 ? Math.round((ab.crediti_usati / ab.crediti_totali) * 100) : 0;
+  const colore = liberi <= 2 ? 'var(--danger)' : liberi <= 5 ? '#d68a1a' : 'var(--green)';
+  const statoCol = { prova:'#d68a1a', attivo:'var(--green)', scaduto:'var(--danger)', sospeso:'var(--text3)' };
+
+  el.innerHTML = '<div style="padding:4px 0">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    + '<span style="font-size:13px;color:var(--text3)">Stagione ' + (ab.stagione?.nome||'—') + '</span>'
+    + '<span style="font-size:12px;font-weight:600;color:' + (statoCol[ab.stato]||'var(--text3)') + '">' + (ab.stato||'—').toUpperCase() + '</span>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;">'
+    + statCard('Totali', ab.crediti_totali, 'var(--accent)')
+    + statCard('Usati', ab.crediti_usati, 'var(--text2)')
+    + statCard('Disponibili', liberi, colore)
+    + '</div>'
+    + '<div style="background:var(--bg3);border-radius:100px;height:8px;overflow:hidden;margin-bottom:12px">'
+    + '<div style="width:' + perc + '%;height:100%;background:' + colore + ';border-radius:100px"></div></div>'
+    + (liberi <= 3
+      ? '<div style="background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--danger);">'
+        + "⚠ Crediti quasi esauriti — contatta l'amministratore per ricaricare.</div>"
+      : '<div style="font-size:12px;color:var(--text3)">Per ricaricare i crediti contatta l\'amministratore di tesserato.club.</div>')
+    + '</div>';
 }
 
 // ============================================================
