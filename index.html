@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.3</span>
+      <span class="release-badge" title="Versione attuale">v2.4</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1981,7 +1981,7 @@ async function caricaPresenze() {
   html += '<div style="display:grid;gap:4px;margin-top:8px;">';
   atleti.forEach(a => {
     const presente = presenzeEsistenti[a.atleta_id]?.presente ?? true; // default: presente
-    html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius);background:' + (presente?'rgba(26,158,106,0.05)':'rgba(224,92,92,0.05)') + ';border:1px solid ' + (presente?'rgba(26,158,106,0.15)':'rgba(224,92,92,0.15)') + ';">';
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius);background:' + (presente?'rgba(26,158,106,0.05)':'rgba(224,92,92,0.05)') + ';border:1px solid ' + (presente?'rgba(26,158,106,0.15)':'rgba(224,92,92,0.15)') + ';" data-atleta="' + a.atleta_id + '" data-presente="' + (presente?'1':'0') + '">';
     html += '<div style="flex:1;font-size:14px;font-weight:500">' + (a.cognome||'') + ' ' + (a.nome||'') + '</div>';
     html += '<div style="display:flex;gap:6px;">';
     html += '<button class="btn btn-sm ' + (presente?'btn-primary':'btn-secondary') + '" onclick="togglePresenza(this,true)" data-atleta="' + a.atleta_id + '" data-stato="' + (presente?'1':'0') + '">✓ Presente</button>';
@@ -2004,6 +2004,8 @@ function togglePresenza(btn, presente) {
   btns[1].className = 'btn btn-sm ' + (!presente ? 'btn-danger' : 'btn-secondary');
   row.style.background = presente ? 'rgba(26,158,106,0.05)' : 'rgba(224,92,92,0.05)';
   row.style.border = '1px solid ' + (presente ? 'rgba(26,158,106,0.15)' : 'rgba(224,92,92,0.15)');
+  // Salva stato in data-attribute per lettura affidabile
+  row.dataset.presente = presente ? '1' : '0';
 }
 
 async function salvaPresenze(gruppoId, data) {
@@ -2030,7 +2032,7 @@ async function salvaPresenze(gruppoId, data) {
     allenamento_id: allenamentoId,
     atleta_id:      row.dataset.atleta,
     data:           data,
-    presente:       row.querySelector('.btn-primary') !== null && row.querySelector('.btn-primary').textContent.includes('Presente'),
+    presente:       row.dataset.presente !== undefined ? row.dataset.presente === '1' : (row.querySelector('.btn-primary') !== null && row.querySelector('.btn-primary').textContent.includes('Presente')),
     registrato_da:  currentUser?.id || null,
   }));
 
@@ -3591,11 +3593,13 @@ let maStep = 1;
 let maMinorenne = false;
 let maSocieta = null;
 let maSocietaNome = '';
+let maGruppo = null;
 
 async function apriModalAtleta() {
   maStep = 1;
   maMinorenne = false;
   maSocieta = null;
+  maGruppo = null;
   resetFormAtleta();
   await popolaSocietaModal();
   maShowStep(1);
@@ -3692,12 +3696,31 @@ function maShowStep(n) {
   maStep = n;
 }
 
+
+async function maPopulaGruppi(societaId) {
+  const selG = document.getElementById('reg-gruppo');
+  if (!selG) return;
+  selG.innerHTML = '<option value="">— Seleziona gruppo —</option>';
+  if (!societaId) return;
+  let q = sb.from('gruppo').select('id, nome').eq('societa_id', societaId).order('nome');
+  if (currentStagioneId) q = q.eq('stagione_id', currentStagioneId);
+  const { data: gruppi } = await q;
+  (gruppi || []).forEach(g => {
+    const o = document.createElement('option');
+    o.value = g.id; o.textContent = g.nome;
+    selG.appendChild(o);
+  });
+}
+
 function maStepNext() {
   if (maStep === 1) {
     const societa = document.getElementById('reg-societa').value;
     if (!societa) { toast('Seleziona una società', 'error'); return; }
+    const gruppo = document.getElementById('reg-gruppo').value;
+    if (!gruppo) { toast('Seleziona un gruppo / squadra', 'error'); return; }
     maSocieta = societa;
     maSocietaNome = document.getElementById('reg-societa').options[document.getElementById('reg-societa').selectedIndex].text;
+    maGruppo = gruppo;
     maShowStep(2);
   } else if (maStep === 2) {
     if (!validaStepAtleta()) return;
@@ -3766,7 +3789,9 @@ function generaRiepilogoAtleta() {
   const v = id => document.getElementById(id)?.value || '';
   const nascita = v('a-nascita');
   let html = '<div style="margin-bottom:12px"><strong style="font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text3)">Società</strong><br>';
-  html += '🏢 ' + maSocietaNome + ' — Stagione ' + document.getElementById('reg-stagione-label').value + '</div>';
+  const gruppoSel = document.getElementById('reg-gruppo');
+  const gruppoNomeRiep = gruppoSel?.options[gruppoSel?.selectedIndex]?.text || '';
+  html += '🏢 ' + maSocietaNome + (gruppoNomeRiep ? ' · ' + gruppoNomeRiep : '') + ' — Stagione ' + document.getElementById('reg-stagione-label').value + '</div>';
   html += '<div style="margin-bottom:12px"><strong style="font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text3)">Atleta</strong><br>';
   html += '👤 ' + v('a-cognome').toUpperCase() + ' ' + v('a-nome').toUpperCase() + '<br>';
   html += '📅 ' + (nascita ? new Date(nascita).toLocaleDateString('it-IT') : '—') + ' — ' + (maMinorenne ? '🔸 Minorenne' : '🔹 Maggiorenne') + '<br>';
@@ -3916,6 +3941,40 @@ async function salvaAtleta() {
           relazione: document.getElementById('g2-relazione')?.value,
           referente_principale: false,
         });
+      }
+    }
+
+    // 3. Crea iscrizione per stagione corrente e assegna gruppo
+    if (currentStagioneId && maGruppo) {
+      // Cerca iscrizione esistente
+      let iscId = null;
+      const { data: iscEx } = await sb.from('iscrizione')
+        .select('id').eq('atleta_id', atleta.id).eq('stagione_id', currentStagioneId).maybeSingle();
+      if (iscEx) {
+        iscId = iscEx.id;
+      } else {
+        const intestatoNome = maMinorenne
+          ? (document.getElementById('g1-cognome')?.value || '') + ' ' + (document.getElementById('g1-nome')?.value || '')
+          : (document.getElementById('a-cognome')?.value || '') + ' ' + (document.getElementById('a-nome')?.value || '');
+        const { data: newIsc } = await sb.from('iscrizione').insert({
+          atleta_id: atleta.id,
+          stagione_id: currentStagioneId,
+          stato: 'attiva',
+          data_iscrizione: new Date().toISOString().split('T')[0],
+          intestato_nome: intestatoNome.trim().toUpperCase() || null,
+        }).select('id').single();
+        if (newIsc) iscId = newIsc.id;
+      }
+      if (iscId && maGruppo) {
+        const { data: igEx } = await sb.from('iscrizione_gruppo')
+          .select('id').eq('iscrizione_id', iscId).eq('gruppo_id', maGruppo).maybeSingle();
+        if (!igEx) {
+          await sb.from('iscrizione_gruppo').insert({
+            iscrizione_id: iscId,
+            gruppo_id: maGruppo,
+            principale: true,
+          });
+        }
       }
     }
 
@@ -4748,6 +4807,8 @@ async function salvaPagamento() {
     chiudiModalPagamento();
     loadPagamenti();
     loadDashboard();
+    // Genera PDF ricevuta automaticamente
+    setTimeout(() => generaPdfRicevuta(currentPagamentoId), 500);
 
   } catch(e) {
     toast('Errore: ' + e.message, 'error');
@@ -7025,6 +7086,13 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <div class="field">
           <label>Stagione corrente</label>
           <input type="text" id="reg-stagione-label" disabled style="background:var(--bg3);color:var(--text2);">
+        </div>
+        <div class="field">
+          <label>Gruppo / Squadra *</label>
+          <select id="reg-gruppo" style="font-size:14px;padding:10px 12px;">
+            <option value="">— Seleziona prima la società —</option>
+          </select>
+          <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">Obbligatorio — determina la società di appartenenza</small>
         </div>
       </div>
 
