@@ -2,9 +2,8 @@ name: Supabase Keep-Alive
 
 on:
   schedule:
-    # Ogni 5 giorni alle 08:00 UTC
     - cron: '0 8 */5 * *'
-  workflow_dispatch: # permette di eseguirlo manualmente
+  workflow_dispatch:
 
 jobs:
   ping:
@@ -13,9 +12,7 @@ jobs:
       - name: Ping Supabase
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://brwkwlyxkptzmkzkvava.supabase.co/rest/v1/" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+            "https://brwkwlyxkptzmkzkvava.supabase.co/auth/v1/health")
           echo "HTTP Status: $STATUS"
           if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
             echo "✅ Supabase è attivo"
