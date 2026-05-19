@@ -702,7 +702,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.7</span>
+      <span class="release-badge" title="Versione attuale">v2.8</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -908,6 +908,17 @@ tbody tr:last-child { border-bottom: none; }
       <div class="section" id="section-pagamenti">
         <div class="page-title">Pagamenti</div>
         <div class="page-sub">Registro pagamenti e rate</div>
+        <!-- Card abbonamenti società — solo admin -->
+        <div class="card" id="card-abbonamenti-dashboard" style="margin-bottom:16px;display:none">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="card-title">🏢 Stato abbonamenti società</div>
+            <button class="btn btn-sm btn-secondary" onclick="caricaAbbonamentiDashboard()">↻</button>
+          </div>
+          <div id="abbonamenti-dashboard-content">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+
         <div class="card" id="card-bonifici-pendenti" style="margin-bottom:16px;display:none">
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
             <div class="card-title">🏦 Bonifici in attesa di verifica</div>
@@ -1993,6 +2004,56 @@ async function completaRegistrazioneInvito() {
 }
 
 
+
+async function caricaAbbonamentiDashboard() {
+  const el = document.getElementById('abbonamenti-dashboard-content');
+  if (!el) return;
+
+  const { data: abbs } = await sb.from('abbonamento')
+    .select('crediti_totali, crediti_usati, stato, scade_il, societa(id, nome, tipo)')
+    .eq('stagione_id', currentStagioneId)
+    .order('stato');
+
+  // Società senza abbonamento
+  const { data: tutteSoc } = await sb.from('societa').select('id, nome, tipo').order('nome');
+
+  if ((!abbs || abbs.length === 0) && (!tutteSoc || tutteSoc.length === 0)) {
+    el.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:8px">Nessuna società registrata.</p>';
+    return;
+  }
+
+  const abbMap = {};
+  (abbs||[]).forEach(a => { if (a.societa?.id) abbMap[a.societa.id] = a; });
+
+  const statoCol = { prova:'#d68a1a', attivo:'var(--green)', scaduto:'var(--danger)', sospeso:'var(--text3)' };
+  const statoIcon = { prova:'⏳', attivo:'✅', scaduto:'❌', sospeso:'⏸' };
+
+  let html = '<div style="display:grid;gap:8px;padding:4px 0;">';
+  (tutteSoc||[]).forEach(s => {
+    const ab = abbMap[s.id];
+    const liberi = ab ? ab.crediti_totali - ab.crediti_usati : 0;
+    const perc   = ab && ab.crediti_totali > 0 ? Math.round((ab.crediti_usati / ab.crediti_totali) * 100) : 0;
+    const colore = !ab ? 'var(--danger)' : liberi <= 2 ? 'var(--danger)' : liberi <= 5 ? '#d68a1a' : 'var(--green)';
+
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg2);">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-weight:600;font-size:14px">' + (s.tipo?.toUpperCase()||'') + ' ' + s.nome + '</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-top:2px">'
+      + (ab ? (statoIcon[ab.stato]||'') + ' ' + ab.stato + ' · crediti: ' + liberi + '/' + ab.crediti_totali : '⚠ Nessun abbonamento')
+      + '</div>'
+      + (ab ? '<div style="width:100%;background:var(--bg3);border-radius:100px;height:4px;margin-top:6px;overflow:hidden"><div style="width:' + perc + '%;height:100%;background:' + colore + ';border-radius:100px"></div></div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:6px;flex-shrink:0">'
+      + (!ab || ab.stato !== 'attivo'
+          ? '<button class="btn btn-sm btn-primary" data-sid="' + s.id + '" onclick="apriModalNuovoAbbonamento(this.dataset.sid)">+ Abbonamento</button>'
+          : '<button class="btn btn-sm btn-secondary" data-sid="' + s.id + '" onclick="apriModalNuovoAbbonamento(this.dataset.sid)">+ Ricarica</button>')
+      + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 // ============================================================
 // ABBONAMENTI
 // ============================================================
@@ -2040,7 +2101,7 @@ async function loadAbbonamenti() {
   }).join('');
 }
 
-async function apriModalNuovoAbbonamento() {
+async function apriModalNuovoAbbonamento(preSocietaId = null) {
   // Popola piani
   const selP = document.getElementById('ab-piano');
   selP.innerHTML = '<option value="">— Seleziona piano —</option>';
@@ -3432,6 +3493,13 @@ async function loadDashboard() {
 
   // Riepilogo finanziario
   loadRiepilogoFinanziario();
+
+  // Abbonamenti società (solo admin)
+  const cardAbb = document.getElementById('card-abbonamenti-dashboard');
+  if (cardAbb && currentProfilo?.ruolo === 'amministratore') {
+    cardAbb.style.display = 'block';
+    caricaAbbonamentiDashboard();
+  }
 
   // Tabella certificati
   let qCerts = sb.from('v_certificati_in_scadenza').select('*').limit(10);
@@ -5891,19 +5959,41 @@ async function loadSocietaList() {
   const { data } = await sb.from('societa').select('*').order('nome');
   const tbody = document.getElementById('tbody-societa');
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🏢</div><p>Nessuna società</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🏢</div><p>Nessuna società</p></div></td></tr>';
     return;
   }
+
+  // Carica abbonamenti per la stagione corrente
+  const { data: abbs } = await sb.from('abbonamento')
+    .select('societa_id, crediti_totali, crediti_usati, stato')
+    .eq('stagione_id', currentStagioneId);
+  const abbMap = {};
+  (abbs||[]).forEach(a => { abbMap[a.societa_id] = a; });
+
   const tipi = { asd: 'ASD', ssd: 'SSD', srl: 'S.r.l.', altro: 'Altro' };
-  tbody.innerHTML = data.map(s => `<tr>
-    <td><strong>${s.nome}</strong></td>
-    <td><span class="badge badge-gray">${tipi[s.tipo] || s.tipo || '—'}</span></td>
-    <td style="font-family:var(--mono)">${s.codice_fiscale || '—'}</td>
-    <td>${s.comune || '—'}</td>
-    <td>${s.telefono || '—'}</td>
-    <td>${s.email || '—'}</td>
-    <td><button class="btn btn-sm btn-primary" onclick="apriModalSocieta('${s.id}')">⚙️ Configura</button></td>
-  </tr>`).join('');
+  const statoCol = { prova:'badge-yellow', attivo:'badge-green', scaduto:'badge-red', sospeso:'badge-gray' };
+
+  tbody.innerHTML = data.map(s => {
+    const ab = abbMap[s.id];
+    const liberi = ab ? ab.crediti_totali - ab.crediti_usati : null;
+    const colore = !ab ? 'var(--text3)' : liberi <= 2 ? 'var(--danger)' : liberi <= 5 ? '#d68a1a' : 'var(--green)';
+    const creditiHtml = ab
+      ? '<div style="display:flex;align-items:center;gap:8px">'
+        + '<span class="badge ' + (statoCol[ab.stato]||'badge-gray') + '">' + ab.stato + '</span>'
+        + '<span style="font-family:var(--mono);font-size:13px;font-weight:600;color:' + colore + '">' + liberi + '/' + ab.crediti_totali + '</span>'
+        + '</div>'
+      : '<span style="color:var(--danger);font-size:12px">⚠ Nessun abbonamento</span>';
+    return '<tr>'
+      + '<td><strong>' + s.nome + '</strong></td>'
+      + '<td><span class="badge badge-gray">' + (tipi[s.tipo]||s.tipo||'—') + '</span></td>'
+      + '<td style="font-family:var(--mono)">' + (s.codice_fiscale||'—') + '</td>'
+      + '<td>' + (s.comune||'—') + '</td>'
+      + '<td>' + (s.telefono||'—') + '</td>'
+      + '<td>' + creditiHtml + '</td>'
+      + '<td><button class="btn btn-sm btn-primary" data-sid="' + s.id + '" onclick="apriModalSocieta(this.dataset.sid)">⚙️ Configura</button>'
+      + '<button class="btn btn-sm btn-secondary" style="margin-left:4px" data-sid="' + s.id + '" onclick="apriModalNuovoAbbonamento(this.dataset.sid)">💳</button></td>'
+      + '</tr>';
+  }).join('');
 }
 
 
