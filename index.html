@@ -702,7 +702,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.5</span>
+      <span class="release-badge" title="Versione attuale">v2.6</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1213,6 +1213,36 @@ tbody tr:last-child { border-bottom: none; }
       </div>
 
 
+
+      <!-- ABBONAMENTI -->
+      <div class="section" id="section-abbonamenti">
+        <div class="page-title">Abbonamenti</div>
+        <div class="page-sub">Gestione piani e crediti per società</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" onclick="apriModalNuovoAbbonamento()">+ Nuovo abbonamento</button>
+        </div>
+        <div id="abbonamenti-grid"></div>
+      </div>
+
+      <!-- RICHIESTE DEMO -->
+      <div class="section" id="section-demo">
+        <div class="page-title">Richieste demo</div>
+        <div class="page-sub">Società interessate al gestionale</div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Società</th><th>Referente</th><th>Email</th><th>Tel</th>
+                <th>Sport</th><th>Atleti</th><th>Stato</th><th></th>
+              </tr></thead>
+              <tbody id="tbody-demo">
+                <tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- INVITI -->
       <div class="section" id="section-inviti">
         <div class="page-title">Inviti accesso</div>
@@ -1338,6 +1368,8 @@ const MENU = {
     { section: 'presenze',   icon: '✅', label: 'Presenze' },
     { section: 'stagioni',   icon: '📅', label: 'Stagioni' },
     { section: 'onboarding',icon: '🚀', label: 'Nuova società' },
+    { section: 'abbonamenti', icon: '💳', label: 'Abbonamenti' },
+    { section: 'demo',        icon: '📋', label: 'Richieste demo' },
     { section: 'inviti',    icon: '✉️', label: 'Inviti' },
     { section: 'utenti',    icon: '🔐', label: 'Utenti' },
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
@@ -1512,6 +1544,8 @@ async function loadSection(section) {
     case 'pagamenti':  loadPagamenti(); break;
     case 'documenti':  loadDocumenti(); break;
     case 'tariffe':    loadTariffe(); break;
+    case 'abbonamenti': loadAbbonamenti(); break;
+    case 'demo':        loadRichiestDemo(); break;
     case 'inviti':     loadInviti(); break;
     case 'utenti':     loadUtenti(); break;
     case 'profilo':    loadProfilo(); break;
@@ -1949,6 +1983,213 @@ async function completaRegistrazioneInvito() {
   } finally {
     btn.disabled = false; btn.textContent = 'Completa registrazione';
   }
+}
+
+
+// ============================================================
+// ABBONAMENTI
+// ============================================================
+async function loadAbbonamenti() {
+  const grid = document.getElementById('abbonamenti-grid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const { data } = await sb.from('abbonamento')
+    .select('*, societa(nome, tipo), stagione(nome), piano(nome, crediti_inclusi)')
+    .order('creato_il', { ascending: false });
+
+  if (!data || data.length === 0) {
+    grid.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px">Nessun abbonamento registrato.</p></div>';
+    return;
+  }
+
+  const statoColors = { prova:'badge-yellow', attivo:'badge-green', scaduto:'badge-red', sospeso:'badge-gray' };
+
+  grid.innerHTML = data.map(a => {
+    const credLib = a.crediti_totali - a.crediti_usati;
+    const perc = a.crediti_totali > 0 ? Math.round((a.crediti_usati / a.crediti_totali) * 100) : 0;
+    const colBar = credLib <= 2 ? 'var(--danger)' : credLib <= 5 ? '#d68a1a' : 'var(--green)';
+    return '<div class="card" style="margin-bottom:16px">'
+      + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+      + '<div style="flex:1;min-width:200px">'
+      + '<div style="font-size:17px;font-weight:700">' + (a.societa?.tipo?.toUpperCase()||'') + ' ' + (a.societa?.nome||'—') + '</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-top:2px">Stagione ' + (a.stagione?.nome||'—') + (a.piano?.nome ? ' · Piano ' + a.piano.nome : '') + '</div>'
+      + '</div>'
+      + '<span class="badge ' + (statoColors[a.stato]||'badge-gray') + '">' + (a.stato||'—') + '</span>'
+      + '</div>'
+      + '<div style="margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">'
+      + statCard('Crediti totali', a.crediti_totali, 'var(--accent)')
+      + statCard('Usati', a.crediti_usati, 'var(--text2)')
+      + statCard('Liberi', credLib, colBar)
+      + '</div>'
+      + '<div style="margin-top:12px;background:var(--bg3);border-radius:100px;height:8px;overflow:hidden">'
+      + '<div style="width:' + perc + '%;height:100%;background:' + colBar + ';border-radius:100px"></div></div>'
+      + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">'
+      + '<button class="btn btn-sm btn-secondary" data-abid="' + a.id + '" onclick="apriModalRicarica(this.dataset.abid)">+ Ricarica crediti</button>'
+      + '<button class="btn btn-sm btn-secondary" data-abid="' + a.id + '" onclick="apriModalCambiaPiano(this.dataset.abid)">📋 Cambia piano</button>'
+      + (a.stato !== 'attivo' ? '<button class="btn btn-sm btn-primary" data-abid="' + a.id + '" onclick="attivaAbbonamento(this.dataset.abid)">✓ Attiva</button>' : '')
+      + (a.stato === 'attivo' ? '<button class="btn btn-sm btn-danger" data-abid="' + a.id + '" onclick="sospendiAbbonamento(this.dataset.abid)">Sospendi</button>' : '')
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+async function apriModalNuovoAbbonamento() {
+  // Popola piani
+  const selP = document.getElementById('ab-piano');
+  selP.innerHTML = '<option value="">— Seleziona piano —</option>';
+  const { data: piani } = await sb.from('piano').select('*').eq('attivo', true).order('ordine');
+  (piani||[]).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.nome + ' — €' + p.prezzo_totale.toFixed(2) + ' (' + (p.crediti_inclusi + 5) + ' crediti totali)';
+    o.dataset.crediti = p.crediti_inclusi;
+    selP.appendChild(o);
+  });
+  // Popola società
+  const selS = document.getElementById('ab-societa');
+  selS.innerHTML = '<option value="">— Seleziona società —</option>';
+  const { data: soc } = await sb.from('societa').select('id,nome,tipo').order('nome');
+  (soc||[]).forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.tipo.toUpperCase()+' '+s.nome; selS.appendChild(o); });
+  apriModal('modal-abbonamento');
+}
+
+async function salvaAbbonamento() {
+  const societaId = document.getElementById('ab-societa').value;
+  const pianoId   = document.getElementById('ab-piano').value;
+  const selP      = document.getElementById('ab-piano');
+  const crediti   = parseInt(selP.options[selP.selectedIndex]?.dataset?.crediti || 0);
+  if (!societaId || !pianoId) { toast('Seleziona società e piano', 'error'); return; }
+
+  const btn = document.querySelector('#modal-abbonamento .btn-primary');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
+  try {
+    const { data: ab, error } = await sb.from('abbonamento').insert({
+      societa_id: societaId,
+      piano_id: pianoId,
+      stagione_id: currentStagioneId,
+      crediti_totali: crediti + 5, // 5 gratuiti + piano
+      crediti_usati: 0,
+      stato: 'attivo',
+      primo_acquisto: true,
+      attivo_dal: new Date().toISOString(),
+    }).select('id').single();
+    if (error) throw new Error(error.message);
+
+    await sb.from('credito_movimento').insert({
+      abbonamento_id: ab.id,
+      tipo: 'acquisto',
+      quantita: crediti + 5,
+      note: 'Attivazione piano ' + selP.options[selP.selectedIndex].text,
+      creato_da: currentUser.id,
+    });
+
+    toast('Abbonamento attivato!', 'success');
+    chiudiModal('modal-abbonamento');
+    loadAbbonamenti();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💳 Attiva abbonamento';
+  }
+}
+
+async function attivaAbbonamento(id) {
+  if (!confirm('Attivare questo abbonamento?')) return;
+  await sb.from('abbonamento').update({ stato: 'attivo', attivo_dal: new Date().toISOString() }).eq('id', id);
+  toast('Abbonamento attivato!', 'success');
+  loadAbbonamenti();
+}
+
+async function sospendiAbbonamento(id) {
+  if (!confirm('Sospendere questo abbonamento?')) return;
+  await sb.from('abbonamento').update({ stato: 'sospeso' }).eq('id', id);
+  toast('Abbonamento sospeso', 'success');
+  loadAbbonamenti();
+}
+
+async function apriModalRicarica(abId) {
+  document.getElementById('ric-ab-id').value = abId;
+  document.getElementById('ric-quantita').value = '10';
+  aggiornaPrezzoRicarica();
+  apriModal('modal-ricarica');
+}
+
+function aggiornaPrezzoRicarica() {
+  const q = parseInt(document.getElementById('ric-quantita').value) || 0;
+  const prezzo = q <= 10 ? q * 8 : q <= 25 ? q * 6 : q * 4;
+  document.getElementById('ric-prezzo').textContent = '€ ' + prezzo.toFixed(2).replace('.', ',');
+}
+
+async function salvaRicarica() {
+  const abId = document.getElementById('ric-ab-id').value;
+  const q    = parseInt(document.getElementById('ric-quantita').value) || 0;
+  if (q <= 0) { toast('Inserisci la quantità', 'error'); return; }
+
+  const { data: ab } = await sb.from('abbonamento').select('crediti_totali, primo_acquisto').eq('id', abId).single();
+  const nuoviTot = (ab?.crediti_totali || 0) + q;
+
+  const btn = document.querySelector('#modal-ricarica .btn-primary');
+  btn.disabled = true;
+  try {
+    await sb.from('abbonamento').update({ crediti_totali: nuoviTot, stato: 'attivo', primo_acquisto: false }).eq('id', abId);
+    await sb.from('credito_movimento').insert({
+      abbonamento_id: abId, tipo: 'acquisto', quantita: q,
+      note: 'Ricarica ' + q + ' crediti', creato_da: currentUser.id,
+    });
+    toast('Ricarica effettuata! +' + q + ' crediti', 'success');
+    chiudiModal('modal-ricarica');
+    loadAbbonamenti();
+  } catch(e) { toast('Errore: ' + e.message, 'error'); }
+  finally { btn.disabled = false; }
+}
+
+// ============================================================
+// RICHIESTE DEMO
+// ============================================================
+async function loadRichiestDemo() {
+  const { data } = await sb.from('richiesta_demo').select('*').order('creato_il', { ascending: false });
+  const tbody = document.getElementById('tbody-demo');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessuna richiesta demo ricevuta.</p></div></td></tr>';
+    return;
+  }
+  const statoOpt = ['nuova','contattata','convertita','archiviata'];
+  const statoCol = { nuova:'badge-yellow', contattata:'badge-green', convertita:'badge-green', archiviata:'badge-gray' };
+  tbody.innerHTML = data.map(r => '<tr>' +
+    '<td><strong>' + (r.nome_societa||'—') + '</strong><br><small style="color:var(--text3)">' + (r.sport||'') + '</small></td>' +
+    '<td>' + (r.cognome_referente||'') + ' ' + (r.nome_referente||'') + '</td>' +
+    '<td><a href="mailto:' + r.email + '" style="color:var(--accent)">' + r.email + '</a></td>' +
+    '<td>' + (r.telefono||'—') + '</td>' +
+    '<td>' + (r.sport||'—') + '</td>' +
+    '<td>' + (r.n_atleti||'—') + '</td>' +
+    '<td><select data-rid="' + r.id + '" onchange="aggiornaStatoDemo(this.dataset.rid,this.value)" style="font-size:12px;padding:4px 8px">' +
+      statoOpt.map(s => '<option value="' + s + '"' + (r.stato===s?' selected':'') + '>' + s + '</option>').join('') +
+    '</select></td>' +
+    '<td><button class="btn btn-sm btn-secondary" data-rid="' + r.id + '" onclick="convertiDemoInSocieta(this.dataset.rid)">→ Crea società</button></td>' +
+    '</tr>'
+  ).join('');
+}
+
+async function aggiornaStatoDemo(id, stato) {
+  await sb.from('richiesta_demo').update({ stato }).eq('id', id);
+  toast('Stato aggiornato', 'success');
+}
+
+async function convertiDemoInSocieta(id) {
+  const { data: r } = await sb.from('richiesta_demo').select('*').eq('id', id).single();
+  if (!r) return;
+  // Pre-compila wizard onboarding con i dati della richiesta
+  navigateTo('onboarding');
+  setTimeout(() => {
+    document.getElementById('onb-nome').value = r.nome_societa?.toUpperCase() || '';
+    document.getElementById('onb-email').value = r.email || '';
+    document.getElementById('onb-telefono').value = r.telefono || '';
+    document.getElementById('onb-seg-nome').value = r.nome_referente?.toUpperCase() || '';
+    document.getElementById('onb-seg-cognome').value = r.cognome_referente?.toUpperCase() || '';
+    document.getElementById('onb-seg-email').value = r.email || '';
+    toast('Dati pre-compilati dal wizard — completa e attiva', 'info');
+  }, 300);
+  await sb.from('richiesta_demo').update({ stato: 'convertita' }).eq('id', id);
 }
 
 // ============================================================
@@ -7059,10 +7300,30 @@ async function attivaOnboarding() {
     const {error:profErr}=await sb.from('profilo').insert({id:profiloId,nome:seg.nome,cognome:seg.cognome,email:seg.email,ruolo:'segreteria',attivo:true});
     if(profErr) throw new Error('Errore profilo: '+profErr.message);
     await sb.from('segreteria_societa').insert({profilo_id:profiloId,societa_id:societaId});
+    // Crea abbonamento prova con 5 crediti gratuiti
+    const { data: stagione } = await sb.from('stagione').select('id').eq('attiva', true).maybeSingle();
+    if (stagione) {
+      await sb.from('abbonamento').insert({
+        societa_id: societaId,
+        stagione_id: stagione.id,
+        crediti_totali: 5,
+        crediti_usati: 0,
+        stato: 'prova',
+        primo_acquisto: true,
+        attivo_dal: new Date().toISOString(),
+      });
+      await sb.from('credito_movimento').insert({
+        tipo: 'bonus',
+        quantita: 5,
+        note: 'Crediti gratuiti al primo accesso',
+        creato_da: currentUser.id,
+      });
+    }
+
     document.getElementById('onb-success').style.display='block';
     btn.style.display='none';
     copiaRiepilogoOnb();
-    toast('Societa attivata! Credenziali copiate.','success');
+    toast('Societa attivata! 5 crediti gratuiti assegnati.','success');
   } catch(e) {
     toast('Errore: '+e.message,'error');
     btn.disabled=false; btn.textContent='Attiva societa';
@@ -8635,6 +8896,59 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="chiudiModal('modal-link-invito')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL NUOVO ABBONAMENTO -->
+<div class="modal-overlay" id="modal-abbonamento">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">💳 Nuovo abbonamento</div>
+      <button class="modal-close" onclick="chiudiModal('modal-abbonamento')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Società *</label>
+        <select id="ab-societa"><option value="">— Seleziona società —</option></select>
+      </div>
+      <div class="field"><label>Piano *</label>
+        <select id="ab-piano"><option value="">— Seleziona piano —</option></select>
+      </div>
+      <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.15);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);">
+        ℹ️ I primi 5 crediti sono sempre gratuiti. Il piano include crediti aggiuntivi.
+        Al primo acquisto vengono assegnati 5 crediti bonus + quelli del piano.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-abbonamento')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaAbbonamento()">💳 Attiva abbonamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RICARICA CREDITI -->
+<div class="modal-overlay" id="modal-ricarica">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">+ Ricarica crediti</div>
+      <button class="modal-close" onclick="chiudiModal('modal-ricarica')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ric-ab-id">
+      <div class="field">
+        <label>Quantità crediti</label>
+        <input type="number" id="ric-quantita" value="10" min="1" max="100" oninput="aggiornaPrezzoRicarica()">
+        <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">1-10: €8/cad · 11-25: €6/cad · 26+: €4/cad</small>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:14px;font-weight:600">Totale da pagare</span>
+        <span style="font-size:20px;font-weight:700;font-family:var(--mono)" id="ric-prezzo">€ 80,00</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-ricarica')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaRicarica()">✓ Conferma ricarica</button>
     </div>
   </div>
 </div>
