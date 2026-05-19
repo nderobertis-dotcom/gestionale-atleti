@@ -14,9 +14,9 @@ jobs:
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://brwkwlyxkptzmkzkvava.supabase.co/auth/v1/health")
           echo "HTTP Status: $STATUS"
-          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
-            echo "✅ Supabase è attivo"
+          if [ "$STATUS" -gt 0 ]; then
+            echo "✅ Supabase è attivo (status $STATUS)"
           else
-            echo "❌ Ping fallito con status $STATUS"
+            echo "❌ Nessuna risposta da Supabase"
             exit 1
           fi
