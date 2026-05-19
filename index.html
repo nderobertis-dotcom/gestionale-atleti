@@ -4058,7 +4058,7 @@ async function loadTariffe() {
 // ============================================================
 async function loadUtenti() {
   let { data } = await sb.from('profilo')
-    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(cognome, nome)), profilo_atleta(atleta(cognome, nome)), allenatore_gruppo(gruppo(societa(nome)))')
+    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(id, cognome, nome, atleta_genitore(atleta(cognome, nome)))), profilo_atleta(atleta(cognome, nome)), allenatore_gruppo(gruppo(societa(nome)))')
     .order('cognome');
   // Filtro per società: mostra solo utenti della società selezionata (eccetto admin)
   if (data && currentSocietaId) {
@@ -4076,11 +4076,12 @@ async function loadUtenti() {
   tbody.innerHTML = data.map(u => {
     let infoCol = '—';
     if (u.ruolo === 'genitore') {
-      // Mostra i figli collegati tramite atleta_genitore
       const g = u.profilo_genitore?.[0]?.genitore;
       if (g) {
-        // Cerca i figli in atleta_genitore
-        infoCol = '<span style="color:var(--text3);font-size:12px">figlio/i di ' + g.cognome + ' ' + g.nome + '</span>';
+        const figli = (g.atleta_genitore || []).map(ag => ag.atleta?.cognome + ' ' + ag.atleta?.nome).filter(Boolean);
+        infoCol = figli.length > 0
+          ? figli.join(', ')
+          : '<span style="color:var(--text3);font-size:12px">Nessun figlio collegato</span>';
       } else {
         infoCol = '<span style="color:var(--danger);font-size:12px">⚠ Non collegato</span>';
       }
