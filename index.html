@@ -1952,11 +1952,7 @@ async function caricaPresenze() {
   }).filter(Boolean);
   // Deduplicazione per atleta_id
   const atletiMap = {};
-<<<<<<< HEAD
   atletiRaw.forEach(a => { if (a.atleta_id) atletiMap[a.atleta_id] = a; });
-=======
-  atletiUnici.forEach(a => { if (a.atleta_id) atletiMap[a.atleta_id] = a; });
->>>>>>> 0d3f527427d96f82a1868dba6d12826c66e5277d
   const atletiUnici = Object.values(atletiMap);
   atletiUnici.sort((a,b) => (a.cognome||'').localeCompare(b.cognome||''));
 
