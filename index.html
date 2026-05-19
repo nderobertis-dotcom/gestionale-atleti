@@ -1986,7 +1986,7 @@ async function caricaPresenze() {
   html += '</div>';
 
   html += '<div style="display:grid;gap:4px;margin-top:8px;">';
-  atleti.forEach(a => {
+  atletiUnici.forEach(a => {
     const presente = presenzeEsistenti[a.atleta_id]?.presente ?? true; // default: presente
     html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius);background:' + (presente?'rgba(26,158,106,0.05)':'rgba(224,92,92,0.05)') + ';border:1px solid ' + (presente?'rgba(26,158,106,0.15)':'rgba(224,92,92,0.15)') + ';" data-atleta="' + a.atleta_id + '" data-presente="' + (presente?'1':'0') + '">';
     html += '<div style="flex:1;font-size:14px;font-weight:500">' + (a.cognome||'') + ' ' + (a.nome||'') + '</div>';
