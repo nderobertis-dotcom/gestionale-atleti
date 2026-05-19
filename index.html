@@ -616,7 +616,37 @@ tbody tr:last-child { border-bottom: none; }
 
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
-  <div class="login-box">
+  <!-- REGISTRAZIONE VIA INVITO -->
+  <div class="login-box" id="registrazione-invito-box" style="display:none">
+    <div class="login-logo">
+      <img src="./logo_tesserato_club.png" alt="Tesserato.club" class="logo-img">
+      <span>tesserato.club</span>
+    </div>
+    <h2>Crea il tuo account</h2>
+    <p>Hai ricevuto un invito. Completa la registrazione per accedere.</p>
+    <div id="reg-inv-info" style="margin-bottom:16px"></div>
+    <div id="reg-inv-form">
+      <input type="hidden" id="reg-inv-token">
+      <div class="field">
+        <label>Email *</label>
+        <input type="email" id="reg-inv-email" placeholder="La tua email">
+      </div>
+      <div class="field">
+        <label>Password *</label>
+        <input type="password" id="reg-inv-pwd" placeholder="Minimo 8 caratteri">
+      </div>
+      <div class="field">
+        <label>Conferma password *</label>
+        <input type="password" id="reg-inv-pwd2" placeholder="Ripeti la password">
+      </div>
+      <button id="btn-reg-inv" class="btn btn-primary" style="width:100%;margin-top:8px" onclick="completaRegistrazioneInvito()">Completa registrazione</button>
+    </div>
+    <div style="text-align:center;margin-top:16px">
+      <a href="/" style="color:var(--text3);font-size:13px">← Torna al login</a>
+    </div>
+  </div>
+
+  <div class="login-box" id="login-box">
     <div class="login-logo">
       <img src="./logo_tesserato_club.png" alt="Tesserato.club" class="logo-img">
       <span>tesserato.club</span>
@@ -672,7 +702,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.4</span>
+      <span class="release-badge" title="Versione attuale">v2.5</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1182,6 +1212,34 @@ tbody tr:last-child { border-bottom: none; }
         </div>
       </div>
 
+
+      <!-- INVITI -->
+      <div class="section" id="section-inviti">
+        <div class="page-title">Inviti accesso</div>
+        <div class="page-sub">Genera link di registrazione per genitori, atleti e segreteria</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-nuovo-invito">+ Nuovo invito</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Destinatario</th>
+                <th>Ruolo</th>
+                <th>Società</th>
+                <th>Email</th>
+                <th>Scadenza</th>
+                <th>Stato</th>
+                <th></th>
+              </tr></thead>
+              <tbody id="tbody-inviti">
+                <tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- UTENTI (solo admin) -->
       <div class="section" id="section-utenti">
         <div class="page-title">Utenti</div>
@@ -1280,6 +1338,7 @@ const MENU = {
     { section: 'presenze',   icon: '✅', label: 'Presenze' },
     { section: 'stagioni',   icon: '📅', label: 'Stagioni' },
     { section: 'onboarding',icon: '🚀', label: 'Nuova società' },
+    { section: 'inviti',    icon: '✉️', label: 'Inviti' },
     { section: 'utenti',    icon: '🔐', label: 'Utenti' },
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
   ],
@@ -1453,6 +1512,7 @@ async function loadSection(section) {
     case 'pagamenti':  loadPagamenti(); break;
     case 'documenti':  loadDocumenti(); break;
     case 'tariffe':    loadTariffe(); break;
+    case 'inviti':     loadInviti(); break;
     case 'utenti':     loadUtenti(); break;
     case 'profilo':    loadProfilo(); break;
     case 'societa':    loadSocietaList(); break;
@@ -1622,6 +1682,272 @@ async function niStep2Avanti() {
     toast('Errore: ' + e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Avanti → Tariffa';
+  }
+}
+
+
+// ============================================================
+// INVITI ACCESSO
+// ============================================================
+async function loadInviti() {
+  let query = sb.from('invito')
+    .select('*, genitore(cognome, nome), atleta(cognome, nome), societa(nome)')
+    .order('creato_il', { ascending: false });
+  if (currentProfilo?.ruolo === 'segreteria' && currentSocietaId) {
+    query = query.eq('societa_id', currentSocietaId);
+  }
+  const { data } = await query;
+  const tbody = document.getElementById('tbody-inviti');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">✉️</div><p>Nessun invito generato. Creane uno con il bottone "+ Nuovo invito".</p></div></td></tr>';
+    return;
+  }
+  const oggi = new Date();
+  tbody.innerHTML = data.map(inv => {
+    const dest = inv.nome_invitato ||
+      (inv.genitore ? inv.genitore.cognome + ' ' + inv.genitore.nome : '') ||
+      (inv.atleta   ? inv.atleta.cognome   + ' ' + inv.atleta.nome   : '') || '—';
+    const scad = inv.scade_il ? new Date(inv.scade_il) : null;
+    const scaduta = scad && scad < oggi;
+    let stato;
+    if (inv.usato) stato = '<span class="badge badge-green">✓ Usato</span>';
+    else if (scaduta) stato = '<span class="badge badge-red">Scaduto</span>';
+    else stato = '<span class="badge badge-yellow">In attesa</span>';
+    const link = window.location.origin + '/?invito=' + inv.token;
+    return '<tr>' +
+      '<td><strong>' + dest + '</strong></td>' +
+      '<td><span class="badge badge-gray">' + inv.ruolo + '</span></td>' +
+      '<td>' + (inv.societa?.nome || '—') + '</td>' +
+      '<td style="font-size:12px;color:var(--text3)">' + (inv.email || '—') + '</td>' +
+      '<td style="font-size:12px">' + (scad ? scad.toLocaleDateString('it-IT') : '—') + '</td>' +
+      '<td>' + stato + '</td>' +
+      '<td style="display:flex;gap:6px;">' +
+        (!inv.usato && !scaduta ? '<button class="btn btn-sm btn-secondary" data-link="' + link + '" onclick="copiaLinkInvito(this.dataset.link)">📋 Copia link</button>' : '') +
+        '<button class="btn btn-sm btn-danger" data-iid="' + inv.id + '" onclick="eliminaInvito(this.dataset.iid)">🗑</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function copiaLinkInvito(link) {
+  navigator.clipboard.writeText(link).then(() => {
+    toast('Link copiato! Invialo al destinatario via WhatsApp o email.', 'success');
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = link; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    toast('Link copiato!', 'success');
+  });
+}
+
+async function apriModalNuovoInvito(preRuolo = null, preGenitoreId = null, preAtletaId = null) {
+  document.getElementById('inv-ruolo').value = preRuolo || 'genitore';
+  document.getElementById('inv-email').value = '';
+  document.getElementById('inv-nome').value = '';
+  document.getElementById('inv-genitore').value = preGenitoreId || '';
+  document.getElementById('inv-atleta').value = preAtletaId || '';
+  aggiornaFormInvito();
+
+  // Popola società
+  const selS = document.getElementById('inv-societa');
+  selS.innerHTML = '<option value="">— Seleziona società —</option>';
+  if (currentProfilo?.ruolo === 'segreteria') {
+    const { data: ss } = await sb.from('segreteria_societa').select('societa(id,nome)').eq('profilo_id', currentUser.id);
+    (ss||[]).forEach(r => { const o=document.createElement('option'); o.value=r.societa.id; o.textContent=r.societa.nome; selS.appendChild(o); });
+    if (ss?.length === 1) selS.value = ss[0].societa.id;
+  } else {
+    const { data: soc } = await sb.from('societa').select('id,nome').order('nome');
+    (soc||[]).forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.nome; selS.appendChild(o); });
+    if (currentSocietaId) selS.value = currentSocietaId;
+  }
+
+  // Popola genitori
+  const selG = document.getElementById('inv-genitore');
+  selG.innerHTML = '<option value="">— Seleziona genitore —</option>';
+  const { data: gen } = await sb.from('genitore').select('id,cognome,nome').order('cognome');
+  (gen||[]).forEach(g => { const o=document.createElement('option'); o.value=g.id; o.textContent=g.cognome+' '+g.nome; selG.appendChild(o); });
+  if (preGenitoreId) selG.value = preGenitoreId;
+
+  // Popola atleti
+  const selA = document.getElementById('inv-atleta');
+  selA.innerHTML = '<option value="">— Seleziona atleta —</option>';
+  const { data: atl } = await sb.from('atleta').select('id,cognome,nome').order('cognome');
+  (atl||[]).forEach(a => { const o=document.createElement('option'); o.value=a.id; o.textContent=a.cognome+' '+a.nome; selA.appendChild(o); });
+  if (preAtletaId) selA.value = preAtletaId;
+
+  apriModal('modal-invito');
+}
+
+function aggiornaFormInvito() {
+  const ruolo = document.getElementById('inv-ruolo').value;
+  document.getElementById('inv-genitore-field').style.display  = ruolo === 'genitore'   ? 'block' : 'none';
+  document.getElementById('inv-atleta-field').style.display    = ruolo === 'atleta'     ? 'block' : 'none';
+  document.getElementById('inv-nome-field').style.display      = ruolo === 'segreteria' ? 'block' : 'none';
+  document.getElementById('inv-societa-field').style.display   = 'block';
+}
+
+async function salvaInvito() {
+  const ruolo     = document.getElementById('inv-ruolo').value;
+  const email     = document.getElementById('inv-email').value.trim();
+  const societaId = document.getElementById('inv-societa').value;
+  const genitoreId = document.getElementById('inv-genitore').value;
+  const atletaId  = document.getElementById('inv-atleta').value;
+  const nome      = document.getElementById('inv-nome').value.trim();
+
+  if (!societaId) { toast('Seleziona una società', 'error'); return; }
+  if (ruolo === 'genitore' && !genitoreId) { toast('Seleziona il genitore', 'error'); return; }
+  if (ruolo === 'atleta'   && !atletaId)   { toast('Seleziona l\'atleta', 'error'); return; }
+
+  const btn = document.querySelector('#modal-invito .btn-primary');
+  btn.disabled = true; btn.textContent = 'Generazione...';
+
+  try {
+    const payload = {
+      ruolo,
+      email:        email || null,
+      societa_id:   societaId || null,
+      genitore_id:  genitoreId || null,
+      atleta_id:    atletaId  || null,
+      nome_invitato: nome || null,
+      creato_da:    currentUser.id,
+    };
+
+    const { data: inv, error } = await sb.from('invito').insert(payload).select('token').single();
+    if (error) throw new Error(error.message);
+
+    const link = window.location.origin + '/?invito=' + inv.token;
+
+    chiudiModal('modal-invito');
+    loadInviti();
+
+    // Mostra il link generato
+    document.getElementById('link-invito-text').value = link;
+    apriModal('modal-link-invito');
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '✉️ Genera invito';
+  }
+}
+
+async function eliminaInvito(id) {
+  if (!confirm('Eliminare questo invito?')) return;
+  await sb.from('invito').delete().eq('id', id);
+  toast('Invito eliminato', 'success');
+  loadInviti();
+}
+
+// Gestione link invito dalla scheda genitore/atleta
+document.getElementById('scheda-genitore-invito')?.addEventListener('click', async () => {
+  // Recupera genitore_id dalla scheda aperta
+  const id = document.querySelector('#scheda-genitore-body')?.dataset?.genitoreId;
+  await apriModalNuovoInvito('genitore', id || null, null);
+});
+
+document.getElementById('btn-nuovo-invito')?.addEventListener('click', () => apriModalNuovoInvito());
+
+// ============================================================
+// REGISTRAZIONE VIA TOKEN (pagina pubblica)
+// ============================================================
+async function verificaTokenInvito() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('invito');
+  if (!token) return false;
+
+  // Mostra form registrazione
+  document.getElementById('login-box').style.display = 'none';
+  document.getElementById('registrazione-invito-box').style.display = 'block';
+
+  const { data: inv } = await sb.from('invito').select('*, genitore(cognome, nome), atleta(cognome, nome), societa(nome)').eq('token', token).maybeSingle();
+
+  const el = document.getElementById('reg-inv-info');
+  if (!inv) {
+    el.innerHTML = '<div style="color:var(--danger)">❌ Invito non valido o inesistente.</div>';
+    document.getElementById('reg-inv-form').style.display = 'none';
+    return true;
+  }
+  if (inv.usato) {
+    el.innerHTML = '<div style="color:var(--danger)">❌ Questo invito è già stato utilizzato.</div>';
+    document.getElementById('reg-inv-form').style.display = 'none';
+    return true;
+  }
+  if (new Date(inv.scade_il) < new Date()) {
+    el.innerHTML = '<div style="color:var(--danger)">❌ Questo invito è scaduto.</div>';
+    document.getElementById('reg-inv-form').style.display = 'none';
+    return true;
+  }
+
+  const dest = inv.nome_invitato ||
+    (inv.genitore ? inv.genitore.cognome + ' ' + inv.genitore.nome : '') ||
+    (inv.atleta   ? inv.atleta.cognome   + ' ' + inv.atleta.nome   : '');
+
+  el.innerHTML = '<div style="background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.2);border-radius:var(--radius);padding:12px 16px;font-size:14px;">' +
+    '✅ Invito per <strong>' + dest + '</strong>' +
+    (inv.societa?.nome ? '<br><span style="color:var(--text3);font-size:12px">🏢 ' + inv.societa.nome + '</span>' : '') +
+    '<br><span style="color:var(--text3);font-size:12px">Ruolo: ' + inv.ruolo + '</span>' +
+    '</div>';
+
+  if (inv.email) document.getElementById('reg-inv-email').value = inv.email;
+  document.getElementById('reg-inv-token').value = token;
+  return true;
+}
+
+async function completaRegistrazioneInvito() {
+  const token   = document.getElementById('reg-inv-token').value;
+  const email   = document.getElementById('reg-inv-email').value.trim();
+  const pwd     = document.getElementById('reg-inv-pwd').value;
+  const pwd2    = document.getElementById('reg-inv-pwd2').value;
+
+  if (!email) { toast('Inserisci la tua email', 'error'); return; }
+  if (pwd.length < 8) { toast('La password deve essere di almeno 8 caratteri', 'error'); return; }
+  if (pwd !== pwd2) { toast('Le password non coincidono', 'error'); return; }
+
+  const btn = document.getElementById('btn-reg-inv');
+  btn.disabled = true; btn.textContent = 'Registrazione...';
+
+  try {
+    // Carica invito
+    const { data: inv } = await sb.from('invito').select('*').eq('token', token).single();
+    if (!inv || inv.usato) throw new Error('Invito non valido');
+
+    // Crea account Supabase Auth
+    const { data: auth, error: authErr } = await sb.auth.signUp({ email, password: pwd });
+    if (authErr) throw new Error(authErr.message);
+    const uid = auth.user?.id;
+    if (!uid) throw new Error('Errore creazione account');
+
+    // Crea profilo
+    const { error: profErr } = await sb.from('profilo').insert({
+      id: uid, email, ruolo: inv.ruolo, attivo: true,
+      nome: '', cognome: '',
+    });
+    if (profErr && !profErr.message.includes('duplicate')) throw new Error(profErr.message);
+
+    // Collega al record corretto
+    if (inv.ruolo === 'genitore' && inv.genitore_id) {
+      await sb.from('profilo_genitore').upsert({ profilo_id: uid, genitore_id: inv.genitore_id });
+    } else if (inv.ruolo === 'atleta' && inv.atleta_id) {
+      await sb.from('profilo_atleta').upsert({ profilo_id: uid, atleta_id: inv.atleta_id });
+    } else if (inv.ruolo === 'segreteria' && inv.societa_id) {
+      await sb.from('segreteria_societa').upsert({ profilo_id: uid, societa_id: inv.societa_id });
+    }
+
+    // Segna invito come usato
+    await sb.from('invito').update({ usato: true, usato_il: new Date().toISOString() }).eq('id', inv.id);
+
+    toast('Registrazione completata! Accedi con le tue credenziali.', 'success');
+    // Torna al login
+    window.history.replaceState({}, '', '/');
+    document.getElementById('registrazione-invito-box').style.display = 'none';
+    document.getElementById('login-box').style.display = 'block';
+    document.getElementById('login-email').value = email;
+
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Completa registrazione';
   }
 }
 
@@ -7050,9 +7376,13 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
 // AVVIO: controlla sessione esistente
 // ============================================================
 (async () => {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session?.user) {
-    await initApp(session.user);
+  // Prima controlla se c'è un token invito nell'URL
+  const tokenRilevato = await verificaTokenInvito();
+  if (!tokenRilevato) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      await initApp(session.user);
+    }
   }
 })();
 </script>
@@ -8006,6 +8336,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-scheda-genitore')">Chiudi</button>
+      <button class="btn btn-secondary" id="scheda-genitore-invito" onclick="">✉️ Invito accesso</button>
       <button class="btn btn-primary" id="scheda-genitore-modifica">✏️ Modifica</button>
     </div>
   </div>
@@ -8233,6 +8564,77 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-modifica-atleta')">Annulla</button>
       <button class="btn btn-primary" onclick="salvaModificaAtleta()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL NUOVO INVITO -->
+<div class="modal-overlay" id="modal-invito">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">✉️ Nuovo invito accesso</div>
+      <button class="modal-close" onclick="chiudiModal('modal-invito')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Ruolo *</label>
+        <select id="inv-ruolo" onchange="aggiornaFormInvito()">
+          <option value="genitore">Genitore</option>
+          <option value="atleta">Atleta (maggiorenne)</option>
+          <option value="segreteria">Segreteria</option>
+        </select>
+      </div>
+      <div class="field" id="inv-societa-field">
+        <label>Società *</label>
+        <select id="inv-societa"><option value="">— Seleziona società —</option></select>
+      </div>
+      <div class="field" id="inv-genitore-field">
+        <label>Genitore *</label>
+        <select id="inv-genitore"><option value="">— Seleziona genitore —</option></select>
+      </div>
+      <div class="field" id="inv-atleta-field" style="display:none">
+        <label>Atleta *</label>
+        <select id="inv-atleta"><option value="">— Seleziona atleta —</option></select>
+      </div>
+      <div class="field" id="inv-nome-field" style="display:none">
+        <label>Nome destinatario</label>
+        <input type="text" id="inv-nome" placeholder="Nome e cognome della segreteria">
+      </div>
+      <div class="field">
+        <label>Email (opzionale)</label>
+        <input type="email" id="inv-email" placeholder="Verrà pre-compilata nel form di registrazione">
+      </div>
+      <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.15);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);">
+        ℹ️ Verrà generato un link da inviare manualmente al destinatario. Il link scade dopo 7 giorni.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-invito')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaInvito()">✉️ Genera invito</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LINK INVITO GENERATO -->
+<div class="modal-overlay" id="modal-link-invito">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">✅ Invito generato</div>
+      <button class="modal-close" onclick="chiudiModal('modal-link-invito')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;margin-bottom:12px">Copia il link qui sotto e invialo al destinatario via WhatsApp, email o SMS. Il link scade tra 7 giorni.</p>
+      <div class="field">
+        <label>Link di registrazione</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="link-invito-text" readonly style="flex:1;background:var(--bg3);font-family:var(--mono);font-size:12px;">
+          <button class="btn btn-primary" onclick="copiaLinkInvito(document.getElementById('link-invito-text').value)">📋 Copia</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="chiudiModal('modal-link-invito')">Chiudi</button>
     </div>
   </div>
 </div>
