@@ -2009,10 +2009,11 @@ async function caricaAbbonamentiDashboard() {
   const el = document.getElementById('abbonamenti-dashboard-content');
   if (!el) return;
 
-  const { data: abbs } = await sb.from('abbonamento')
+  let qAbbs = sb.from('abbonamento')
     .select('crediti_totali, crediti_usati, stato, scade_il, societa(id, nome, tipo)')
-    .eq('stagione_id', currentStagioneId)
     .order('stato');
+  if (currentStagioneId) qAbbs = qAbbs.eq('stagione_id', currentStagioneId);
+  const { data: abbs } = await qAbbs;
 
   // Società senza abbonamento
   const { data: tutteSoc } = await sb.from('societa').select('id, nome, tipo').order('nome');
@@ -5964,9 +5965,10 @@ async function loadSocietaList() {
   }
 
   // Carica abbonamenti per la stagione corrente
-  const { data: abbs } = await sb.from('abbonamento')
-    .select('societa_id, crediti_totali, crediti_usati, stato')
-    .eq('stagione_id', currentStagioneId);
+  let qAbbs2 = sb.from('abbonamento')
+    .select('societa_id, crediti_totali, crediti_usati, stato');
+  if (currentStagioneId) qAbbs2 = qAbbs2.eq('stagione_id', currentStagioneId);
+  const { data: abbs } = await qAbbs2;
   const abbMap = {};
   (abbs||[]).forEach(a => { abbMap[a.societa_id] = a; });
 
