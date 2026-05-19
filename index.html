@@ -1297,7 +1297,7 @@ tbody tr:last-child { border-bottom: none; }
                   <th>Nome</th>
                   <th>Email</th>
                   <th>Ruolo</th>
-                  <th>Società</th>
+                  <th>Collegamento</th>
                   <th>Stato</th>
                   <th></th>
                 </tr>
@@ -4058,7 +4058,7 @@ async function loadTariffe() {
 // ============================================================
 async function loadUtenti() {
   let { data } = await sb.from('profilo')
-    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(cognome, nome)), profilo_atleta(atleta(cognome, nome))')
+    .select('id, nome, cognome, email, ruolo, attivo, segreteria_societa(societa_id, societa(nome)), profilo_genitore(genitore(cognome, nome)), profilo_atleta(atleta(cognome, nome)), allenatore_gruppo(gruppo(societa(nome)))')
     .order('cognome');
   // Filtro per società: mostra solo utenti della società selezionata (eccetto admin)
   if (data && currentSocietaId) {
@@ -4076,13 +4076,23 @@ async function loadUtenti() {
   tbody.innerHTML = data.map(u => {
     let infoCol = '—';
     if (u.ruolo === 'genitore') {
+      // Mostra i figli collegati tramite atleta_genitore
       const g = u.profilo_genitore?.[0]?.genitore;
-      infoCol = g ? g.cognome + ' ' + g.nome : '<span style="color:var(--danger);font-size:12px">⚠ Non collegato</span>';
+      if (g) {
+        // Cerca i figli in atleta_genitore
+        infoCol = '<span style="color:var(--text3);font-size:12px">figlio/i di ' + g.cognome + ' ' + g.nome + '</span>';
+      } else {
+        infoCol = '<span style="color:var(--danger);font-size:12px">⚠ Non collegato</span>';
+      }
     } else if (u.ruolo === 'atleta') {
       const a = u.profilo_atleta?.[0]?.atleta;
       infoCol = a ? a.cognome + ' ' + a.nome : '<span style="color:var(--danger);font-size:12px">⚠ Non collegato</span>';
-    } else if (u.ruolo === 'segreteria' || u.ruolo === 'allenatore') {
+    } else if (u.ruolo === 'segreteria') {
       const soc = u.segreteria_societa?.[0]?.societa?.nome;
+      infoCol = soc || '—';
+    } else if (u.ruolo === 'allenatore') {
+      const soc = u.allenatore_gruppo?.[0]?.gruppo?.societa?.nome
+                || u.segreteria_societa?.[0]?.societa?.nome;
       infoCol = soc || '—';
     }
     const isMe = u.id === currentUser?.id;
