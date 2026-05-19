@@ -1946,9 +1946,17 @@ async function caricaPresenze() {
     .eq('gruppo_id', gruppoId)
     .eq('iscrizione.stagione_id', currentStagioneId);
 
-  const atleti = (iscGruppi||[]).map(ig => ig.iscrizione?.atleta).filter(Boolean);
-  atleti.sort((a,b) => (a.cognome||'').localeCompare(b.cognome||''));
+  const atleti = (iscGruppi||[]).map(ig => {
+    if (!ig.iscrizione?.atleta) return null;
+    return { ...ig.iscrizione.atleta, atleta_id: ig.iscrizione.atleta_id };
+  }).filter(Boolean);
+  // Deduplicazione per atleta_id
+  const atletiMap = {};
+  atleti.forEach(a => { if (a.atleta_id) atletiMap[a.atleta_id] = a; });
+  const atletiUnici = Object.values(atletiMap);
+  atletiUnici.sort((a,b) => (a.cognome||'').localeCompare(b.cognome||''));
 
+  const atleti = atletiUnici; // alias per compatibilità
   if (atleti.length === 0) {
     container.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px">Nessun atleta iscritto in questo gruppo per la stagione corrente.</p></div>';
     return;
