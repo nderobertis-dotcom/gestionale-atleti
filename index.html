@@ -672,7 +672,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.2</span>
+      <span class="release-badge" title="Versione attuale">v2.3</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -923,6 +923,13 @@ tbody tr:last-child { border-bottom: none; }
         <div class="page-sub">Gestione documenti e certificati medici</div>
         <div class="toolbar">
           <input type="text" class="search-input" id="search-documenti" placeholder="🔍  Cerca atleta...">
+          <select class="btn btn-secondary" id="filter-doc-scadenza" style="padding:8px 12px" onchange="loadDocumenti()">
+            <option value="">Tutte le scadenze</option>
+            <option value="scaduti">Scaduti</option>
+            <option value="30gg">In scadenza 30 gg</option>
+            <option value="60gg">In scadenza 60 gg</option>
+            <option value="validi">Validi</option>
+          </select>
           <select class="btn btn-secondary" id="filter-doc-tipo" style="padding:8px 12px">
             <option value="">Tutti i tipi</option>
             <option value="certificato_medico">Certificati medici</option>
@@ -1088,6 +1095,7 @@ tbody tr:last-child { border-bottom: none; }
             <p>Seleziona un gruppo e una data per registrare le presenze</p>
           </div>
         </div>
+        <div id="stats-presenze-container" style="margin-top:20px"></div>
       </div>
 
 <!-- STAGIONI -->
@@ -1872,6 +1880,48 @@ async function loadPresenzeSetup() {
   document.getElementById('pres-data').value = new Date().toISOString().split('T')[0];
 }
 
+async function caricaStatistichePresenze() {
+  const gruppoId = document.getElementById('pres-gruppo').value;
+  const el = document.getElementById('stats-presenze-container');
+  if (!el || !gruppoId) return;
+
+  const { data: presenze } = await sb.from('presenza')
+    .select('presente, atleta_id, atleta(cognome, nome), allenamento!inner(gruppo_id)')
+    .eq('allenamento.gruppo_id', gruppoId);
+
+  if (!presenze || presenze.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  // Aggrega per atleta
+  const map = {};
+  presenze.forEach(p => {
+    if (!map[p.atleta_id]) map[p.atleta_id] = { nome: (p.atleta?.cognome||'') + ' ' + (p.atleta?.nome||''), tot: 0, pres: 0 };
+    map[p.atleta_id].tot++;
+    if (p.presente) map[p.atleta_id].pres++;
+  });
+
+  const atleti = Object.values(map).sort((a,b) => (b.pres/b.tot) - (a.pres/a.tot));
+  const totSedute = [...new Set(presenze.map(p => p.allenamento_id))].length || Math.max(...atleti.map(a=>a.tot));
+
+  let html = '<div class="card"><div class="card-header"><div class="card-title">📊 Statistiche presenze gruppo — Stagione</div></div>';
+  html += '<div style="display:grid;gap:6px;margin-top:4px;">';
+  atleti.forEach(a => {
+    const perc = a.tot > 0 ? Math.round((a.pres/a.tot)*100) : 0;
+    const colore = perc >= 75 ? 'var(--green)' : perc >= 50 ? '#d68a1a' : 'var(--danger)';
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">'
+      + '<div style="flex:1;font-size:13px;font-weight:500">' + a.nome + '</div>'
+      + '<div style="font-family:var(--mono);font-size:12px;color:var(--text3);min-width:50px;text-align:right">' + a.pres + '/' + a.tot + '</div>'
+      + '<div style="width:100px;background:var(--bg3);border-radius:100px;height:6px;overflow:hidden">'
+      + '<div style="width:' + perc + '%;height:100%;background:' + colore + ';border-radius:100px"></div></div>'
+      + '<div style="min-width:36px;text-align:right;font-size:12px;font-weight:700;color:' + colore + '">' + perc + '%</div>'
+      + '</div>';
+  });
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
 async function caricaPresenze() {
   const gruppoId = document.getElementById('pres-gruppo').value;
   const data     = document.getElementById('pres-data').value;
@@ -1943,6 +1993,8 @@ async function caricaPresenze() {
   // Salva allenamentoId nel container per salvaPresenze
   container.dataset.allenamentoId = allenamentoId || '';
   container.innerHTML = html;
+  // Aggiorna statistiche
+  caricaStatistichePresenze();
 }
 
 function togglePresenza(btn, presente) {
@@ -1985,6 +2037,7 @@ async function salvaPresenze(gruppoId, data) {
   const { error } = await sb.from('presenza').upsert(upserts, { onConflict: 'allenamento_id,atleta_id,data' });
   if (error) { toast('Errore salvataggio: ' + error.message, 'error'); return; }
   toast('Presenze salvate! (' + upserts.length + ' atleti)', 'success');
+  caricaStatistichePresenze();
 }
 
 // ============================================================
@@ -2317,6 +2370,128 @@ async function loadRiepilogoFinanziario() {
 }
 
 
+
+
+// ============================================================
+// MODIFICA ANAGRAFICA ATLETA
+// ============================================================
+let editAtletaId = null;
+
+async function apriModalModificaAtleta(id) {
+  editAtletaId = id;
+  const { data: a } = await sb.from('atleta').select('*').eq('id', id).single();
+  if (!a) { toast('Atleta non trovato', 'error'); return; }
+
+  const fields = {
+    'ea-cognome': a.cognome, 'ea-nome': a.nome, 'ea-cf': a.codice_fiscale,
+    'ea-nascita': a.data_nascita, 'ea-comune-nascita': a.comune_nascita,
+    'ea-prov-nascita': a.provincia_nascita, 'ea-indirizzo': a.indirizzo,
+    'ea-comune': a.comune, 'ea-provincia': a.provincia, 'ea-cap': a.cap,
+    'ea-telefono': a.telefono, 'ea-email': a.email,
+  };
+  Object.entries(fields).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val || '';
+  });
+  if (document.getElementById('ea-sesso')) document.getElementById('ea-sesso').value = a.sesso || '';
+  apriModal('modal-modifica-atleta');
+}
+
+async function salvaModificaAtleta() {
+  const v = id => document.getElementById(id)?.value?.trim() || null;
+  const payload = {
+    cognome:          v('ea-cognome')?.toUpperCase(),
+    nome:             v('ea-nome')?.toUpperCase(),
+    codice_fiscale:   v('ea-cf')?.toUpperCase(),
+    data_nascita:     v('ea-nascita'),
+    sesso:            document.getElementById('ea-sesso')?.value || null,
+    comune_nascita:   v('ea-comune-nascita')?.toUpperCase(),
+    provincia_nascita:v('ea-prov-nascita')?.toUpperCase(),
+    indirizzo:        v('ea-indirizzo')?.toUpperCase(),
+    comune:           v('ea-comune')?.toUpperCase(),
+    provincia:        v('ea-provincia')?.toUpperCase(),
+    cap:              v('ea-cap'),
+    telefono:         v('ea-telefono'),
+    email:            v('ea-email'),
+  };
+  const btn = document.querySelector('#modal-modifica-atleta .btn-primary');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
+  try {
+    const { error } = await sb.from('atleta').update(payload).eq('id', editAtletaId);
+    if (error) throw new Error(error.message);
+    toast('Anagrafica aggiornata!', 'success');
+    chiudiModal('modal-modifica-atleta');
+    // Ricarica scheda atleta
+    const { data: a } = await sb.from('atleta').select('cognome, nome').eq('id', editAtletaId).single();
+    if (a) apriSchedaAtleta(editAtletaId, a.cognome + ' ' + a.nome);
+    loadAtleti();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Salva';
+  }
+}
+
+// ============================================================
+// STORICO PRESENZE ATLETA (#6)
+// ============================================================
+async function caricaStoricoPresenze(atletaId) {
+  const el = document.getElementById('sa-presenze-content');
+  if (!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const { data: presenze } = await sb.from('presenza')
+    .select('data, presente, note, allenamento(giorno_settimana, ora_inizio, gruppo(nome))')
+    .eq('atleta_id', atletaId)
+    .order('data', { ascending: false });
+
+  if (!presenze || presenze.length === 0) {
+    el.innerHTML = '<p style="color:var(--text3);padding:16px;text-align:center">Nessuna presenza registrata</p>';
+    return;
+  }
+
+  const tot   = presenze.length;
+  const pres  = presenze.filter(p => p.presente).length;
+  const ass   = tot - pres;
+  const perc  = tot > 0 ? Math.round((pres/tot)*100) : 0;
+  const colore = perc >= 75 ? 'var(--green)' : perc >= 50 ? '#d68a1a' : 'var(--danger)';
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">'
+    + statCard('Presenze', pres, 'var(--green)')
+    + statCard('Assenze', ass, 'var(--danger)')
+    + statCard('% Presenza', perc + '%', colore)
+    + '</div>';
+
+  // Barra avanzamento
+  html += '<div style="background:var(--bg3);border-radius:100px;height:8px;margin-bottom:16px;overflow:hidden">'
+    + '<div style="width:' + perc + '%;height:100%;background:' + colore + ';border-radius:100px;transition:width 0.4s"></div></div>';
+
+  // Lista presenze
+  html += '<div style="display:grid;gap:4px;">';
+  presenze.forEach(p => {
+    const data = p.data ? new Date(p.data + 'T00:00:00').toLocaleDateString('it-IT', {weekday:'short',day:'numeric',month:'short',year:'numeric'}) : '—';
+    const gruppo = p.allenamento?.gruppo?.nome || '—';
+    const ora = p.allenamento?.ora_inizio?.slice(0,5) || '';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--radius);background:' + (p.presente ? 'rgba(26,158,106,0.05)' : 'rgba(224,92,92,0.05)') + ';border:1px solid ' + (p.presente ? 'rgba(26,158,106,0.15)' : 'rgba(224,92,92,0.15)') + ';">'
+      + '<span style="font-size:16px">' + (p.presente ? '✅' : '❌') + '</span>'
+      + '<div style="flex:1">'
+      + '<div style="font-size:13px;font-weight:500">' + data + '</div>'
+      + '<div style="font-size:11px;color:var(--text3)">' + gruppo + (ora ? ' · ' + ora : '') + '</div>'
+      + '</div>'
+      + (p.note ? '<div style="font-size:11px;color:var(--text3);font-style:italic">' + p.note + '</div>' : '')
+      + '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function statCard(label, value, color) {
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:700;color:' + color + '">' + value + '</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:0.5px">' + label + '</div>'
+    + '</div>';
+}
+
 // ============================================================
 // STAMPA SCHEDA ATLETA PDF
 // ============================================================
@@ -2553,17 +2728,27 @@ async function scaricaContabile(path) {
 }
 
 async function confermaBonifico(pid) {
-  if (!confirm('Confermare l\'incasso del bonifico? Il pagamento verrà segnato come pagato.')) return;
-  const { error } = await sb.from('pagamento').update({
-    pagato: true,
-    pagato_il: new Date().toISOString().split('T')[0],
-    richiesta_verifica: false,
-    metodo: 'bonifico',
-  }).eq('id', pid);
-  if (error) { toast('Errore: ' + error.message, 'error'); return; }
-  toast('Incasso confermato!', 'success');
-  caricaBonificiPendenti();
-  loadDashboard();
+  if (!confirm('Confermare l\'incasso del bonifico? Il pagamento verrà segnato come pagato e verrà generata la ricevuta.')) return;
+  try {
+    // Genera numero ricevuta
+    const { data: numRic } = await sb.rpc('prossimo_numero_ricevuta', { p_societa_id: currentSocietaId || null });
+    const { error } = await sb.from('pagamento').update({
+      pagato: true,
+      pagato_il: new Date().toISOString().split('T')[0],
+      richiesta_verifica: false,
+      metodo: 'bonifico',
+      numero_ricevuta: numRic,
+    }).eq('id', pid);
+    if (error) throw new Error(error.message);
+    toast('Incasso confermato! Ricevuta: ' + (numRic || '—'), 'success');
+    caricaBonificiPendenti();
+    loadPagamenti();
+    loadDashboard();
+    // Genera PDF ricevuta automaticamente
+    if (numRic) setTimeout(() => generaPdfRicevuta(pid), 500);
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
 }
 
 async function rifiutaBonifico(pid) {
@@ -3130,6 +3315,20 @@ async function loadDocumenti() {
       d.atleta?.nome?.toLowerCase().includes(search)
     );
   }
+  // Filtro scadenza
+  const filtroScad = document.getElementById('filter-doc-scadenza')?.value || '';
+  if (data && filtroScad) {
+    const oggi = new Date();
+    data = data.filter(d => {
+      const scad = d.data_scadenza ? new Date(d.data_scadenza + 'T00:00:00') : null;
+      const giorni = scad ? Math.round((scad - oggi) / 86400000) : null;
+      if (filtroScad === 'scaduti')  return scad && giorni < 0;
+      if (filtroScad === '30gg')     return scad && giorni >= 0 && giorni <= 30;
+      if (filtroScad === '60gg')     return scad && giorni >= 0 && giorni <= 60;
+      if (filtroScad === 'validi')   return scad && giorni > 60;
+      return true;
+    });
+  }
   const tbody = document.getElementById('tbody-documenti');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📄</div><p>Nessun documento trovato</p></div></td></tr>';
@@ -3356,6 +3555,7 @@ document.getElementById('filter-pagamento-stato').addEventListener('change', loa
 document.getElementById('filter-iscrizioni-gruppo')?.addEventListener('change', loadIscrizioni);
 document.getElementById('filter-iscrizioni-stato')?.addEventListener('change', loadIscrizioni);
 document.getElementById('filter-doc-tipo').addEventListener('change', loadDocumenti);
+document.getElementById('filter-doc-scadenza')?.addEventListener('change', loadDocumenti);
 
 // Bottone nuovo pagamento (placeholder — i pagamenti si generano dalle rate)
 document.getElementById('btn-nuovo-pagamento')?.addEventListener('click', () =>
@@ -5309,6 +5509,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   event.target.classList.add('active');
+  if (tab === 'presenze' && schedaAtletaId) caricaStoricoPresenze(schedaAtletaId);
 }
 
 function chiudiSchedaAtleta() {
@@ -5387,6 +5588,17 @@ async function apriSchedaAtleta(id, nome) {
   document.getElementById('sa-dati-personali').innerHTML = rows.map(([l,v]) =>
     '<div class="info-label">' + l + '</div><div class="info-value">' + v + '</div>'
   ).join('');
+
+  // Bottone modifica anagrafica (admin/segreteria)
+  const btnModAna = document.getElementById('sa-btn-modifica-anagrafica');
+  if (btnModAna) {
+    if (currentProfilo?.ruolo === 'amministratore' || currentProfilo?.ruolo === 'segreteria') {
+      btnModAna.style.display = 'inline-flex';
+      btnModAna.onclick = () => apriModalModificaAtleta(id);
+    } else {
+      btnModAna.style.display = 'none';
+    }
+  }
 
   // Genitori se minorenne
   const sezioneGen = document.getElementById('sa-sezione-genitori');
@@ -7370,6 +7582,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       <div class="scheda-info">
         <div class="scheda-nome" id="sa-nome">—</div>
         <div class="scheda-badges" id="sa-badges"></div>
+        <button id="sa-btn-modifica-anagrafica" class="btn btn-sm btn-secondary" style="display:none;margin-top:6px">✏️ Modifica anagrafica</button>
       </div>
       <button class="scheda-close" onclick="chiudiSchedaAtleta()">✕</button>
     </div>
@@ -7378,6 +7591,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       <button class="tab-btn" onclick="switchTab('documenti')">📄 Documenti</button>
       <button class="tab-btn" onclick="switchTab('pagamenti')">💳 Pagamenti</button>
       <button class="tab-btn" onclick="switchTab('note')">📝 Note</button>
+      <button class="tab-btn" onclick="switchTab('presenze')">✅ Presenze</button>
       <button class="btn btn-sm btn-secondary" onclick="stampaSchedaAtleta()" style="margin-left:auto;margin-right:4px;flex-shrink:0" title="Stampa / Salva PDF">🖨️ PDF</button>
     </div>
     <div class="tab-content">
@@ -7400,6 +7614,11 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       </div>
 
       <!-- TAB NOTE -->
+      <div class="tab-panel" id="tab-presenze">
+        <div id="sa-presenze-content">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
       <div class="tab-panel" id="tab-note">
         <div class="field">
           <label>Note sull'atleta</label>
@@ -7905,6 +8124,40 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-bonifico')">Annulla</button>
       <button class="btn btn-primary" onclick="salvaContabileBonifico()">📤 Invia contabile</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL MODIFICA ATLETA -->
+<div class="modal-overlay" id="modal-modifica-atleta">
+  <div class="modal" style="max-width:560px;overflow-y:auto;max-height:90vh">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Modifica anagrafica atleta</div>
+      <button class="modal-close" onclick="chiudiModal('modal-modifica-atleta')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field"><label>Cognome *</label><input type="text" id="ea-cognome" style="text-transform:uppercase"></div>
+        <div class="field"><label>Nome *</label><input type="text" id="ea-nome" style="text-transform:uppercase"></div>
+        <div class="field"><label>Codice Fiscale</label><input type="text" id="ea-cf" maxlength="16" style="text-transform:uppercase"></div>
+        <div class="field"><label>Data di nascita</label><input type="date" id="ea-nascita"></div>
+        <div class="field"><label>Sesso</label>
+          <select id="ea-sesso"><option value="">—</option><option value="M">Maschio</option><option value="F">Femmina</option></select>
+        </div>
+        <div class="field"><label>Comune di nascita</label><input type="text" id="ea-comune-nascita" style="text-transform:uppercase"></div>
+        <div class="field"><label>Provincia nascita</label><input type="text" id="ea-prov-nascita" maxlength="2" style="text-transform:uppercase"></div>
+        <div class="field" style="grid-column:1/-1"><label>Indirizzo</label><input type="text" id="ea-indirizzo" style="text-transform:uppercase"></div>
+        <div class="field"><label>Comune</label><input type="text" id="ea-comune" style="text-transform:uppercase"></div>
+        <div class="field"><label>Provincia</label><input type="text" id="ea-provincia" maxlength="2" style="text-transform:uppercase"></div>
+        <div class="field"><label>CAP</label><input type="text" id="ea-cap" maxlength="5"></div>
+        <div class="field"><label>Telefono</label><input type="tel" id="ea-telefono"></div>
+        <div class="field" style="grid-column:1/-1"><label>Email</label><input type="email" id="ea-email"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModal('modal-modifica-atleta')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaModificaAtleta()">💾 Salva</button>
     </div>
   </div>
 </div>
