@@ -437,21 +437,132 @@ tbody tr:last-child { border-bottom: none; }
 /* ============================================================
    RESPONSIVE MOBILE
    ============================================================ */
+/* ============================================================
+   TABLET (max 768px)
+   ============================================================ */
 @media (max-width: 768px) {
+  /* Sidebar come drawer */
   #sidebar {
-    position: fixed; top: 0; left: 0; bottom: 0;
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 200;
     transform: translateX(-100%);
+    transition: transform 0.25s ease;
   }
-  #sidebar.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.5); }
+  #sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.35); }
   #menu-toggle { display: block; }
-  #content { padding: 16px; }
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  .modal { max-width: 100%; }
+
+  /* Overlay scuro quando sidebar aperta */
+  #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 199; }
+  #sidebar-overlay.active { display: block; }
+
+  /* Layout principale */
+  #main { margin-left: 0; }
+  #content { padding: 12px; }
+  #topbar { padding: 0 12px; }
+
+  /* Stats grid */
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Tabelle scrollabili */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 600px; }
+  th, td { padding: 8px 10px; font-size: 13px; }
+
+  /* Modali full-screen su tablet */
+  .modal {
+    max-width: 100% !important;
+    max-height: 95vh;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    overflow-y: auto;
+  }
+  .modal-overlay { align-items: flex-end; }
+
+  /* Card */
+  .card { border-radius: 10px; padding: 14px; }
+
+  /* Toolbar */
+  .toolbar { flex-wrap: wrap; gap: 8px; }
+  .toolbar .btn { flex: 1; min-width: 120px; justify-content: center; }
+
+  /* Scheda atleta */
+  .scheda-overlay { padding: 0; }
+  .scheda-content { border-radius: 0; max-width: 100%; height: 100vh; overflow-y: auto; }
+  .tab-bar { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  .tab-btn { font-size: 12px; padding: 8px 10px; }
+
+  /* Badge e badge grid */
+  .scheda-badges { flex-wrap: wrap; }
+
+  /* Release badge — più piccolo */
+  .release-badge { font-size: 9px; padding: 2px 7px; }
 }
+
+/* ============================================================
+   SMARTPHONE (max 480px)
+   ============================================================ */
 @media (max-width: 480px) {
-  .stats-grid { grid-template-columns: 1fr; }
+  /* Una colonna */
+  .stats-grid { grid-template-columns: 1fr; gap: 8px; }
+
+  /* Toolbar verticale */
   .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .btn, .toolbar .search-input, .toolbar select { width: 100%; }
   .search-input { min-width: unset; }
+
+  /* Topbar compatta */
+  #topbar-title { font-size: 14px; }
+  #topbar { height: 52px; }
+  #main { margin-top: 52px; }
+
+  /* Tabella: nascondi colonne non essenziali */
+  .col-hide-mobile { display: none !important; }
+
+  /* Testo ridotto in tabella */
+  th, td { padding: 6px 8px; font-size: 12px; }
+
+  /* Bottoni più grandi per touch */
+  .btn { min-height: 40px; padding: 9px 14px; }
+  .btn-sm { min-height: 34px; }
+
+  /* Modali */
+  .modal { border-radius: 16px 16px 0 0; padding: 0; }
+  .modal-header { padding: 16px; }
+  .modal-body { padding: 12px 16px; }
+  .modal-footer { padding: 12px 16px; flex-direction: column; gap: 8px; }
+  .modal-footer .btn { width: 100%; justify-content: center; }
+
+  /* Campo ricerca */
+  .search-input { font-size: 16px; } /* evita zoom su iOS */
+
+  /* Input e select — evita zoom automatico iOS */
+  input, select, textarea { font-size: 16px !important; }
+
+  /* Login box */
+  .login-box { padding: 24px 20px; border-radius: 16px; }
+  .login-logo span { font-size: 16px; }
+
+  /* Grid a 1 colonna nei form */
+  .modal-body [style*="grid-template-columns:1fr 1fr"],
+  .modal-body [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Scheda atleta */
+  .scheda-header { flex-wrap: wrap; gap: 10px; }
+  .scheda-avatar { width: 52px; height: 52px; }
+  .scheda-nome { font-size: 18px; }
+
+  /* Tab presenze e pagamenti */
+  .tab-bar { gap: 0; }
+  .tab-btn { padding: 8px 8px; font-size: 11px; }
+
+  /* Riepilogo finanziario — scroll orizzontale */
+  #riepilogo-finanziario { overflow-x: auto; }
+  #riepilogo-finanziario table { min-width: 480px; }
 }
 
 /* ============================================================
@@ -670,6 +781,7 @@ tbody tr:last-child { border-bottom: none; }
 <div id="app" style="display:none">
 
   <!-- SIDEBAR -->
+  <div id="sidebar-overlay" onclick="chiudiSidebar()"></div>
   <nav id="sidebar">
     <div id="sidebar-logo">
       <img src="./logo_tesserato_club.png" alt="Tesserato.club" class="logo-img">
@@ -702,7 +814,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.8</span>
+      <span class="release-badge" title="Versione attuale">v2.9</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -1454,7 +1566,7 @@ function navigateTo(section) {
   document.getElementById('topbar-title').textContent =
     MENU[currentProfilo?.ruolo]?.find(m => m.section === section)?.label || section;
   // Chiudi sidebar su mobile
-  document.getElementById('sidebar').classList.remove('open');
+  chiudiSidebar();
   // Carica dati sezione
   loadSection(section);
 }
@@ -1462,6 +1574,13 @@ function navigateTo(section) {
 // ============================================================
 // BUILD MENU
 // ============================================================
+
+function chiudiSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
 function buildMenu(ruolo) {
   const nav = document.getElementById('sidebar-nav');
   nav.innerHTML = '';
@@ -4253,7 +4372,10 @@ document.getElementById('btn-login').addEventListener('click', login);
 document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 document.getElementById('btn-logout').addEventListener('click', logout);
 document.getElementById('menu-toggle').addEventListener('click', () => {
-  document.getElementById('sidebar').classList.toggle('open');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const isOpen = sidebar.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('active', isOpen);
 });
 
 // Filtri con debounce
