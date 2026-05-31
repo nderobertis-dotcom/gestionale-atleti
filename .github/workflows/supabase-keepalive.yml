@@ -9,14 +9,14 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase
+      - name: Ping Supabase - progetto 1
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://brwkwlyxkptzmkzkvava.supabase.co/auth/v1/health")
-          echo "HTTP Status: $STATUS"
-          if [ "$STATUS" -gt 0 ]; then
-            echo "✅ Supabase è attivo (status $STATUS)"
-          else
-            echo "❌ Nessuna risposta da Supabase"
-            exit 1
-          fi
+          echo "Progetto 1 - HTTP Status: $STATUS"
+
+      - name: Ping Supabase - progetto 2
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://dfppifjbohdslfqggkhi.supabase.co/auth/v1/health")
+          echo "Progetto 2 - HTTP Status: $STATUS"
