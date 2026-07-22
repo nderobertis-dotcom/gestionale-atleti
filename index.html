@@ -814,7 +814,7 @@ tbody tr:last-child { border-bottom: none; }
       <button id="menu-toggle">☰</button>
       <div id="topbar-title">Dashboard</div>
       <div id="topbar-actions">
-      <span class="release-badge" title="Versione attuale">v2.9</span>
+      <span class="release-badge" title="Versione attuale">v3.0</span>
       <button id="btn-tema" title="Cambia tema" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius);cursor:pointer;font-size:16px;">☀️</button>
     </div>
     </div>
@@ -5344,7 +5344,7 @@ async function apriModalIscrizione(atletaId) {
 
   // Carica iscrizione atleta stagione attiva
   const { data: isc } = await sb.from('iscrizione')
-    .select('id, stato, intestato_cf, intestato_nome, tariffa_id, atleta(cognome, nome), stagione(nome)')
+    .select('id, stato, esente, intestato_cf, intestato_nome, tariffa_id, atleta(cognome, nome), stagione(nome)')
     .eq('atleta_id', atletaId)
     .eq('stagione_id', currentStagioneId)
     .single();
@@ -5373,7 +5373,10 @@ async function apriModalIscrizione(atletaId) {
     o.dataset.tariffa = JSON.stringify(t);
     selT.appendChild(o);
   });
-  if (isc.tariffa_id) {
+  if (isc.esente) {
+    document.getElementById('isc-esente').checked = true;
+    toggleEsente();
+  } else if (isc.tariffa_id) {
     selT.value = isc.tariffa_id;
     selT.dispatchEvent(new Event('change'));
   }
@@ -5511,6 +5514,57 @@ function anteprimaRate() {
 
   document.getElementById('isc-lista-rate').innerHTML = html;
   document.getElementById('isc-preview-rate').style.display = 'block';
+}
+
+
+
+// ============================================================
+// UPLOAD DOCUMENTI DA AREA ATLETA/GENITORE
+// ============================================================
+function apriUploadDocumentoAtleta(atletaId, atletaNome) {
+  // Riusa il modal documenti esistente
+  apriModalDocumento(atletaId, atletaNome);
+}
+
+// ============================================================
+// ESENTE DA PAGAMENTO
+// ============================================================
+function toggleEsente() {
+  const esente = document.getElementById('isc-esente').checked;
+  document.getElementById('isc-tariffa-fields').style.display     = esente ? 'none' : 'block';
+  document.getElementById('isc-tariffa-preview').style.display    = 'none';
+  document.getElementById('isc-preview-rate').style.display       = 'none';
+  document.getElementById('btn-anteprima-rate').style.display     = esente ? 'none' : 'inline-flex';
+  document.getElementById('btn-genera-rate').style.display        = esente ? 'none' : 'inline-flex';
+  document.getElementById('btn-salva-esente').style.display       = esente ? 'inline-flex' : 'none';
+}
+
+async function salvaEsente() {
+  if (!currentIscrizioneId) return;
+  const intestatoNome = document.getElementById('isc-intestato').value;
+  const btn = document.getElementById('btn-salva-esente');
+  btn.disabled = true; btn.textContent = 'Salvataggio...';
+  try {
+    // Segna esente, rimuovi tariffa e cancella eventuali rate esistenti
+    await sb.from('iscrizione').update({
+      esente: true,
+      tariffa_id: null,
+      stato: 'attiva',
+      intestato_nome: intestatoNome || null,
+    }).eq('id', currentIscrizioneId);
+
+    await sb.from('pagamento').delete().eq('iscrizione_id', currentIscrizioneId);
+
+    toast('Atleta segnato come esente — nessuna rata generata', 'success');
+    chiudiModalIscrizione();
+    loadIscrizioni();
+    loadPagamenti();
+    loadDashboard();
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Salva (esente)';
+  }
 }
 
 async function salvaIscrizioneTariffa() {
@@ -7521,7 +7575,10 @@ async function generaCardFiglio(atleta) {
     + sezione('Pagamenti stagione', pagHtml)
 
     // Documenti
-    + sezione('Documenti', docsHtml)
+    + sezione('Documenti',
+        docsHtml +
+        '<button class="btn btn-secondary" style="margin-top:10px;width:100%" onclick="apriUploadDocumentoAtleta(\'' + atleta.id + '\', \'' + (atleta.cognome+' '+atleta.nome).trim() + '\')">📎 Carica / aggiorna documento</button>'
+      )
 
     + '</div>';
 }
@@ -8242,11 +8299,22 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <strong>Stato iscrizione:</strong> <span id="isc-stato-badge">—</span>
       </div>
 
-      <div class="field">
-        <label>Tariffa *</label>
-        <select id="isc-tariffa" style="font-size:14px;padding:10px 12px;">
-          <option value="">— Seleziona tariffa —</option>
-        </select>
+      <!-- Checkbox esente -->
+      <div style="margin-bottom:16px;padding:12px 14px;background:rgba(224,92,92,0.06);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:500;">
+          <input type="checkbox" id="isc-esente" style="width:18px;height:18px;cursor:pointer;" onchange="toggleEsente()">
+          <span>Atleta esente da pagamento</span>
+        </label>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;margin-left:28px">Se spuntato, nessuna quota di iscrizione né rate mensili verranno generate</div>
+      </div>
+
+      <div id="isc-tariffa-fields">
+        <div class="field">
+          <label>Tariffa *</label>
+          <select id="isc-tariffa" style="font-size:14px;padding:10px 12px;">
+            <option value="">— Seleziona tariffa —</option>
+          </select>
+        </div>
       </div>
 
       <div id="isc-tariffa-preview" style="display:none;background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.3);border-radius:var(--radius);padding:12px 14px;font-size:13px;margin-bottom:16px;">
@@ -8278,6 +8346,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       <button class="btn btn-secondary" onclick="chiudiModalIscrizione()">Annulla</button>
       <button class="btn btn-secondary" id="btn-anteprima-rate" onclick="anteprimaRate()">👁 Anteprima rate</button>
       <button class="btn btn-primary" id="btn-genera-rate" onclick="salvaIscrizioneTariffa()" disabled>💾 Salva e genera rate</button>
+      <button class="btn btn-primary" id="btn-salva-esente" onclick="salvaEsente()" style="display:none">💾 Salva (esente)</button>
     </div>
   </div>
 </div>
