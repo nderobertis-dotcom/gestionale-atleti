@@ -1512,6 +1512,7 @@ const MENU = {
     { section: 'iscrizioni',icon: '📋', label: 'Iscrizioni' },
     { section: 'pagamenti', icon: '💳', label: 'Pagamenti' },
     { section: 'documenti', icon: '📄', label: 'Documenti' },
+    { section: 'tariffe',    icon: '🏷️', label: 'Tariffe' },
     { section: 'palestre',   icon: '🏟️', label: 'Palestre' },
     { section: 'calendario', icon: '🗓️', label: 'Calendario' },
     { section: 'profilo',   icon: '⚙️', label: 'Profilo' },
@@ -2081,7 +2082,17 @@ async function completaRegistrazioneInvito() {
   try {
     // Carica invito
     const { data: inv } = await sb.from('invito').select('*').eq('token', token).single();
-    if (!inv || inv.usato) throw new Error('Invito non valido');
+    if (!inv) throw new Error('Invito non valido o scaduto');
+    if (inv.usato) throw new Error('Questo invito è già stato utilizzato. Accedi con le tue credenziali.');
+
+    // Blocca subito l'invito (previene doppio click / doppia richiesta)
+    const { data: lockData, error: lockErr } = await sb.from('invito')
+      .update({ usato: true, usato_il: new Date().toISOString() })
+      .eq('id', inv.id)
+      .eq('usato', false)
+      .select();
+    if (lockErr || !lockData || lockData.length === 0)
+      throw new Error('Invito già utilizzato. Se hai già un account, accedi normalmente.');
 
     // Crea account Supabase Auth
     const { data: auth, error: authErr } = await sb.auth.signUp({ email, password: pwd });
@@ -2089,10 +2100,16 @@ async function completaRegistrazioneInvito() {
     const uid = auth.user?.id;
     if (!uid) throw new Error('Errore creazione account');
 
-    // Crea profilo
+    // Ricava nome e cognome dall'invito
+    const partiNome = (inv.nome_invitato || '').trim().split(' ');
+    const nomeInvito    = partiNome.slice(0, -1).join(' ') || partiNome[0] || '';
+    const cognomeInvito = partiNome.length > 1 ? partiNome[partiNome.length - 1] : '';
+
+    // Crea profilo con nome reale
     const { error: profErr } = await sb.from('profilo').insert({
       id: uid, email, ruolo: inv.ruolo, attivo: true,
-      nome: '', cognome: '',
+      nome: nomeInvito.toUpperCase(),
+      cognome: cognomeInvito.toUpperCase(),
     });
     if (profErr && !profErr.message.includes('duplicate')) throw new Error(profErr.message);
 
@@ -2104,9 +2121,6 @@ async function completaRegistrazioneInvito() {
     } else if (inv.ruolo === 'segreteria' && inv.societa_id) {
       await sb.from('segreteria_societa').upsert({ profilo_id: uid, societa_id: inv.societa_id });
     }
-
-    // Segna invito come usato
-    await sb.from('invito').update({ usato: true, usato_il: new Date().toISOString() }).eq('id', inv.id);
 
     toast('Registrazione completata! Accedi con le tue credenziali.', 'success');
     // Torna al login
