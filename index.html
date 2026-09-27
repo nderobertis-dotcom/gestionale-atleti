@@ -775,13 +775,13 @@ tbody tr:last-child { border-bottom: none; }
     </div>
     <button class="btn btn-primary btn-full" id="btn-login">Accedi</button>
     <div style="text-align:center;margin-top:12px;">
-      <a href="#" onclick="mostraRecuperoPassword()" style="font-size:13px;color:var(--text3);text-decoration:underline;">Password dimenticata?</a>
+      <a href="javascript:void(0)" onclick="mostraRecuperoPassword()" style="font-size:13px;color:var(--text3);text-decoration:underline;">Password dimenticata?</a>
     </div>
   </div>
 </div>
 
 <!-- MODAL RECUPERO PASSWORD -->
-<div class="modal-overlay" id="modal-recupero" style="display:none;align-items:center;justify-content:center;">
+<div class="modal-overlay" id="modal-recupero">
   <div class="modal" style="max-width:400px">
     <div class="modal-header">
       <div class="modal-title">Recupera password</div>
@@ -4363,13 +4363,13 @@ async function login() {
 }
 
 function mostraRecuperoPassword() {
-  document.getElementById('modal-recupero').style.display = 'flex';
+  document.getElementById('modal-recupero').classList.add('open');
   const emailLogin = document.getElementById('login-email').value;
   if (emailLogin) document.getElementById('recupero-email').value = emailLogin;
 }
 
 function chiudiRecuperoPassword() {
-  document.getElementById('modal-recupero').style.display = 'none';
+  document.getElementById('modal-recupero').classList.remove('open');
   document.getElementById('recupero-msg').style.display = 'none';
   document.getElementById('recupero-email').value = '';
 }
