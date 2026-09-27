@@ -774,6 +774,31 @@ tbody tr:last-child { border-bottom: none; }
       <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
     </div>
     <button class="btn btn-primary btn-full" id="btn-login">Accedi</button>
+    <div style="text-align:center;margin-top:12px;">
+      <a href="#" onclick="mostraRecuperoPassword()" style="font-size:13px;color:var(--text3);text-decoration:underline;">Password dimenticata?</a>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RECUPERO PASSWORD -->
+<div class="modal-overlay" id="modal-recupero" style="display:none;align-items:center;justify-content:center;">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">Recupera password</div>
+      <button class="modal-close" onclick="chiudiRecuperoPassword()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--text2);margin-bottom:16px;">Inserisci la tua email. Riceverai un link per reimpostare la password.</p>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="recupero-email" placeholder="nome@esempio.com">
+      </div>
+      <div id="recupero-msg" style="display:none;font-size:13px;margin-top:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiRecuperoPassword()">Annulla</button>
+      <button class="btn btn-primary" id="btn-recupero" onclick="inviaRecuperoPassword()">Invia link</button>
+    </div>
   </div>
 </div>
 
@@ -4335,6 +4360,38 @@ async function login() {
     return;
   }
   await initApp(data.user);
+}
+
+function mostraRecuperoPassword() {
+  document.getElementById('modal-recupero').style.display = 'flex';
+  const emailLogin = document.getElementById('login-email').value;
+  if (emailLogin) document.getElementById('recupero-email').value = emailLogin;
+}
+
+function chiudiRecuperoPassword() {
+  document.getElementById('modal-recupero').style.display = 'none';
+  document.getElementById('recupero-msg').style.display = 'none';
+  document.getElementById('recupero-email').value = '';
+}
+
+async function inviaRecuperoPassword() {
+  const email = document.getElementById('recupero-email').value.trim();
+  const msg = document.getElementById('recupero-msg');
+  const btn = document.getElementById('btn-recupero');
+  if (!email) { msg.textContent = 'Inserisci la tua email.'; msg.style.color = 'var(--danger)'; msg.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Invio...';
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  if (error) {
+    msg.textContent = 'Errore: ' + error.message;
+    msg.style.color = 'var(--danger)';
+  } else {
+    msg.textContent = '✅ Email inviata! Controlla la casella di posta.';
+    msg.style.color = 'var(--success)';
+  }
+  msg.style.display = 'block';
+  btn.disabled = false; btn.textContent = 'Invia link';
 }
 
 async function initApp(user) {
