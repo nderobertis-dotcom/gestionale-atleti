@@ -4706,6 +4706,12 @@ async function popolaSocietaModal() {
   } else {
     stagLabel.value = 'Nessuna stagione attiva';
   }
+
+  // Event listener per caricare i gruppi al cambio società
+  sel.onchange = () => maPopulaGruppi(sel.value);
+
+  // Se società già pre-selezionata (es. segreteria con una sola società), carica subito i gruppi
+  if (sel.value) await maPopulaGruppi(sel.value);
 }
 
 function maShowStep(n) {
