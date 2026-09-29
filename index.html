@@ -5091,6 +5091,17 @@ async function apriSchedaGenitore(id) {
       .select('profilo(email, attivo)').eq('genitore_id', id).maybeSingle();
     const account = pg?.profilo;
 
+    // Cerca invito pendente (non usato, non scaduto) per email del genitore
+    let invitoPendente = null;
+    if (!account && g.email) {
+      const { data: inv } = await sb.from('invito')
+        .select('id, creato_il, scade_il, usato')
+        .eq('email', g.email).eq('ruolo', 'genitore').eq('usato', false)
+        .gt('scade_il', new Date().toISOString())
+        .order('creato_il', { ascending: false }).limit(1).maybeSingle();
+      invitoPendente = inv;
+    }
+
     const infoRiga = (label, val) => !val ? '' :
       `<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
         <span style="min-width:120px;flex-shrink:0;color:var(--text3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;padding-top:2px">${label}</span>
@@ -5118,6 +5129,11 @@ async function apriSchedaGenitore(id) {
       ? `<div style="background:rgba(26,158,106,0.08);border:1px solid rgba(26,158,106,0.25);border-radius:var(--radius);padding:10px 14px;font-size:13px;">
           ✅ Account attivo — <strong>${account.email}</strong>
           ${!account.attivo ? ' <span class="badge badge-red">Disattivato</span>' : ''}
+        </div>`
+      : invitoPendente
+      ? `<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--text2);">
+          ✉️ Invito inviato — in attesa di accettazione
+          <span style="font-size:11px;color:var(--text3);display:block;margin-top:3px">Inviato il ${new Date(invitoPendente.creato_il).toLocaleDateString('it-IT')} · scade il ${new Date(invitoPendente.scade_il).toLocaleDateString('it-IT')}</span>
         </div>`
       : `<div style="background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--text2);">
           ⚠ Nessun accesso piattaforma configurato
