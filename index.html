@@ -1963,9 +1963,14 @@ async function apriModalNuovoInvito(preRuolo = null, preGenitoreId = null, preAt
   // Popola genitori
   const selG = document.getElementById('inv-genitore');
   selG.innerHTML = '<option value="">— Seleziona genitore —</option>';
-  const { data: gen } = await sb.from('genitore').select('id,cognome,nome').order('cognome');
+  const { data: gen } = await sb.from('genitore').select('id,cognome,nome,email').order('cognome');
   (gen||[]).forEach(g => { const o=document.createElement('option'); o.value=g.id; o.textContent=g.cognome+' '+g.nome; selG.appendChild(o); });
-  if (preGenitoreId) selG.value = preGenitoreId;
+  if (preGenitoreId) {
+    selG.value = preGenitoreId;
+    // Pre-compila email dal record genitore
+    const genitoreSelezionato = (gen || []).find(g => g.id === preGenitoreId);
+    if (genitoreSelezionato?.email) document.getElementById('inv-email').value = genitoreSelezionato.email;
+  }
 
   // Popola atleti
   const selA = document.getElementById('inv-atleta');
@@ -5125,6 +5130,7 @@ async function apriSchedaGenitore(id) {
         ${contenuto}
       </div>`;
 
+    document.getElementById('scheda-genitore-body').dataset.genitoreId = id;
     document.getElementById('scheda-genitore-body').innerHTML =
       sezione('Dati anagrafici',
         infoRiga('Cognome e Nome', `<strong>${g.cognome} ${g.nome}</strong>`) +
