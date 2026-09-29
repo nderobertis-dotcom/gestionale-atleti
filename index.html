@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.stripe.com/v3/"></script>
 <style>
 /* ============================================================
    VARIABILI E RESET
@@ -3566,6 +3567,116 @@ async function rifiutaBonifico(pid) {
   toast('Richiesta annullata', 'success');
   caricaBonificiPendenti();
 }
+
+// ============================================================
+// PAGAMENTO CARTA — STRIPE
+// ============================================================
+const STRIPE_PUBLISHABLE_KEY = 'pk_live_51Pw0grLDT200AU24Zz2EvrCenBN0kgg73AaYWDjmM1el7zxuzNlLVc2kyyjuSi7HlcsuKFuvJUBnCGC9Eg42AKta00n0eAiAtl';
+let stripeInstance = null;
+let stripeElements = null;
+let stripePaymentElement = null;
+
+async function apriModalCarta(btn) {
+  const pid   = btn.dataset.pid;
+  const label = btn.dataset.label;
+  const imp   = btn.dataset.imp;
+
+  document.getElementById('carta-pagamento-id').value = pid;
+  document.getElementById('carta-label').textContent   = label;
+  document.getElementById('carta-importo').textContent = '€ ' + parseFloat(imp).toFixed(2).replace('.', ',');
+  document.getElementById('carta-error').style.display = 'none';
+  document.getElementById('btn-paga-carta').disabled   = true;
+  document.getElementById('stripe-payment-element').innerHTML =
+    '<div style="color:var(--text3);font-size:13px;text-align:center;padding:24px"><div class="spinner" style="margin:0 auto"></div></div>';
+
+  apriModal('modal-carta');
+
+  try {
+    // Inizializza Stripe se non ancora fatto
+    if (!stripeInstance) stripeInstance = Stripe(STRIPE_PUBLISHABLE_KEY);
+
+    // Crea PaymentIntent via Edge Function
+    const { data: { session } } = await sb.auth.getSession();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/crea-pagamento-stripe`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + session.access_token,
+        'apikey':        SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ pagamento_id: pid }),
+    });
+    const result = await resp.json();
+    if (result.error) throw new Error(result.error);
+
+    // Monta Stripe Elements
+    stripeElements = stripeInstance.elements({ clientSecret: result.client_secret, locale: 'it' });
+    stripePaymentElement = stripeElements.create('payment');
+    document.getElementById('stripe-payment-element').innerHTML = '';
+    stripePaymentElement.mount('#stripe-payment-element');
+
+    stripePaymentElement.on('ready', () => {
+      document.getElementById('btn-paga-carta').disabled = false;
+    });
+
+  } catch(e) {
+    document.getElementById('stripe-payment-element').innerHTML = '';
+    const errEl = document.getElementById('carta-error');
+    errEl.textContent = 'Errore: ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function chiudiModalCarta() {
+  chiudiModal('modal-carta');
+  if (stripePaymentElement) { stripePaymentElement.unmount(); stripePaymentElement = null; }
+  stripeElements = null;
+}
+
+async function confermaPagamentoCarta() {
+  if (!stripeElements) return;
+  const btn = document.getElementById('btn-paga-carta');
+  const errEl = document.getElementById('carta-error');
+  btn.disabled = true; btn.textContent = 'Elaborazione...';
+  errEl.style.display = 'none';
+
+  const returnUrl = window.location.origin + window.location.pathname + '?pagamento=ok';
+
+  const { error } = await stripeInstance.confirmPayment({
+    elements: stripeElements,
+    confirmParams: { return_url: returnUrl },
+    redirect: 'if_required',
+  });
+
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '💳 Paga ora';
+    return;
+  }
+
+  // Pagamento completato (no redirect necessario)
+  toast('✅ Pagamento completato! La ricevuta sarà disponibile a breve.', 'success');
+  chiudiModalCarta();
+  setTimeout(() => {
+    if (currentProfilo?.ruolo === 'genitore') loadAreaGenitore();
+    else if (currentProfilo?.ruolo === 'atleta') loadAreaAtleta();
+  }, 2000);
+
+  btn.disabled = false; btn.textContent = '💳 Paga ora';
+}
+
+// Gestione redirect da Stripe (return_url dopo 3D Secure)
+(function checkStripeReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('pagamento') === 'ok') {
+    setTimeout(() => toast('✅ Pagamento ricevuto! La ricevuta sarà disponibile a breve.', 'success'), 1000);
+    // Pulisce il parametro dall'URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete('pagamento');
+    history.replaceState({}, '', url.toString());
+  }
+})();
 
 // ============================================================
 // FUNZIONI ELIMINA
@@ -7498,7 +7609,7 @@ async function generaCardFiglio(atleta) {
           } else {
             const imp = parseFloat(p.importo).toFixed(2);
             btnPaga = '<button class="btn btn-sm btn-secondary" data-pid="' + p.id + '" data-label="' + label.replace(/"/g,'') + '" data-imp="' + imp + '" onclick="apriModalBonifico(this)" title="Allega contabile bonifico">🏦 Bonifico</button>'
-              + '<button class="btn btn-sm btn-secondary" style="opacity:0.5;cursor:not-allowed" disabled title="Pagamento con carta — prossimamente">💳 Carta</button>';
+              + '<button class="btn btn-sm btn-secondary" data-pid="' + p.id + '" data-label="' + label.replace(/"/g,'') + '" data-imp="' + imp + '" onclick="apriModalCarta(this)" title="Paga con carta di credito/debito">💳 Carta</button>';
           }
         }
 
@@ -9223,6 +9334,34 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
   </div>
 </div>
 
+
+<!-- MODAL PAGAMENTO CARTA (STRIPE) -->
+<div class="modal-overlay" id="modal-carta">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">💳 Pagamento con carta</div>
+      <button class="modal-close" onclick="chiudiModalCarta()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="carta-pagamento-id">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600" id="carta-label">—</div>
+        <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent);margin-top:4px" id="carta-importo">—</div>
+      </div>
+      <div id="stripe-payment-element" style="min-height:60px;margin-bottom:16px">
+        <div style="color:var(--text3);font-size:13px;text-align:center;padding:24px">Caricamento form pagamento...</div>
+      </div>
+      <div id="carta-error" style="color:var(--danger);font-size:13px;display:none;background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;"></div>
+      <div style="background:rgba(26,111,255,0.06);border:1px solid rgba(26,111,255,0.15);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--text2);">
+        🔒 Pagamento sicuro via Stripe. I tuoi dati di pagamento non vengono mai salvati sui nostri server.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="chiudiModalCarta()">Annulla</button>
+      <button class="btn btn-primary" id="btn-paga-carta" onclick="confermaPagamentoCarta()">💳 Paga ora</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL MODIFICA ATLETA -->
 <div class="modal-overlay" id="modal-modifica-atleta">
