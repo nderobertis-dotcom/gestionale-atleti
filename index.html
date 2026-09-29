@@ -3609,6 +3609,9 @@ async function apriModalCarta(btn) {
     const result = await resp.json();
     if (result.error) throw new Error(result.error);
 
+    // Salva payment_intent_id per la conferma
+    document.getElementById('carta-pagamento-id').dataset.paymentIntentId = result.payment_intent_id;
+
     // Monta Stripe Elements
     stripeElements = stripeInstance.elements({ clientSecret: result.client_secret, locale: 'it' });
     stripePaymentElement = stripeElements.create('payment');
@@ -3655,13 +3658,35 @@ async function confermaPagamentoCarta() {
     return;
   }
 
-  // Pagamento completato (no redirect necessario)
+  // Pagamento completato lato Stripe — aggiorna il DB via Edge Function
+  try {
+    btn.textContent = 'Registrazione...';
+    const pid = document.getElementById('carta-pagamento-id').value;
+    // Recupera il payment_intent_id salvato durante apriModalCarta
+    const piId = document.getElementById('carta-pagamento-id').dataset.paymentIntentId;
+    const { data: { session } } = await sb.auth.getSession();
+    const confResp = await fetch(`${SUPABASE_URL}/functions/v1/conferma-pagamento-stripe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + session.access_token,
+        'apikey':        SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ payment_intent_id: piId, pagamento_id: pid }),
+    });
+    const confResult = await confResp.json();
+    if (!confResult.success) throw new Error(confResult.error || 'Errore conferma');
+  } catch(e) {
+    console.warn('conferma-pagamento-stripe:', e.message);
+    // Non bloccare l'utente — il webhook (se configurato) aggiornerà il DB
+  }
+
   toast('✅ Pagamento completato! La ricevuta sarà disponibile a breve.', 'success');
   chiudiModalCarta();
   setTimeout(() => {
     if (currentProfilo?.ruolo === 'genitore') loadAreaGenitore();
     else if (currentProfilo?.ruolo === 'atleta') loadAreaAtleta();
-  }, 2000);
+  }, 1500);
 
   btn.disabled = false; btn.textContent = '💳 Paga ora';
 }
