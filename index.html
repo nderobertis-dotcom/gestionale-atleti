@@ -2043,11 +2043,10 @@ async function eliminaInvito(id) {
 }
 
 // Gestione link invito dalla scheda genitore/atleta
-document.getElementById('scheda-genitore-invito')?.addEventListener('click', async () => {
-  // Recupera genitore_id dalla scheda aperta
+async function invitaDallaScheda() {
   const id = document.querySelector('#scheda-genitore-body')?.dataset?.genitoreId;
   await apriModalNuovoInvito('genitore', id || null, null);
-});
+}
 
 document.getElementById('btn-nuovo-invito')?.addEventListener('click', () => apriModalNuovoInvito());
 
@@ -9173,7 +9172,7 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="chiudiModal('modal-scheda-genitore')">Chiudi</button>
-      <button class="btn btn-secondary" id="scheda-genitore-invito" onclick="">✉️ Invito accesso</button>
+      <button class="btn btn-secondary" id="scheda-genitore-invito" onclick="invitaDallaScheda()">✉️ Invito accesso</button>
       <button class="btn btn-primary" id="scheda-genitore-modifica">✏️ Modifica</button>
     </div>
   </div>
