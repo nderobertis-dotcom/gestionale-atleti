@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://js.stripe.com/v3/"></script>
+<!-- Stripe caricato dinamicamente solo quando necessario -->
 <style>
 /* ============================================================
    VARIABILI E RESET
@@ -3596,6 +3596,16 @@ async function apriModalCarta(btn) {
   apriModal('modal-carta');
 
   try {
+    // Carica Stripe dinamicamente se non ancora presente
+    if (!window.Stripe) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://js.stripe.com/v3/';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
     // Inizializza Stripe se non ancora fatto
     if (!stripeInstance) stripeInstance = Stripe(STRIPE_PUBLISHABLE_KEY);
 
