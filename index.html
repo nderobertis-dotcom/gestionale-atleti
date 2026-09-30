@@ -2110,25 +2110,21 @@ async function completaRegistrazioneInvito() {
   btn.disabled = true; btn.textContent = 'Registrazione...';
 
   try {
-    // Carica invito
+    // Carica invito (verifica che sia valido)
     const { data: inv } = await sb.from('invito').select('*').eq('token', token).single();
     if (!inv) throw new Error('Invito non valido o scaduto');
     if (inv.usato) throw new Error('Questo invito è già stato utilizzato. Accedi con le tue credenziali.');
-
-    // Blocca subito l'invito (previene doppio click / doppia richiesta)
-    const { data: lockData, error: lockErr } = await sb.from('invito')
-      .update({ usato: true, usato_il: new Date().toISOString() })
-      .eq('id', inv.id)
-      .eq('usato', false)
-      .select();
-    if (lockErr || !lockData || lockData.length === 0)
-      throw new Error('Invito già utilizzato. Se hai già un account, accedi normalmente.');
 
     // Crea account Supabase Auth
     const { data: auth, error: authErr } = await sb.auth.signUp({ email, password: pwd });
     if (authErr) throw new Error(authErr.message);
     const uid = auth.user?.id;
     if (!uid) throw new Error('Errore creazione account');
+
+    // Ora che siamo autenticati, blocca l'invito
+    await sb.from('invito')
+      .update({ usato: true, usato_il: new Date().toISOString() })
+      .eq('id', inv.id);
 
     // Ricava nome e cognome dall'invito
     const partiNome = (inv.nome_invitato || '').trim().split(' ');
