@@ -5893,7 +5893,7 @@ async function apriModalPagamento(pagamentoId, atletaNome, tipo, importo, scaden
   document.getElementById('pag-atleta-nome').textContent = atletaNome || '—';
   document.getElementById('pag-tipo-label').textContent = tipo || '—';
   document.getElementById('pag-importo-label').textContent = '€ ' + parseFloat(importo).toFixed(2).replace('.', ',');
-  document.getElementById('pag-scadenza-label').textContent = scadenza ? new Date(scadenza + 'T00:00:00').toLocaleDateString('it-IT') : '—';
+  document.getElementById('pag-scadenza').value = scadenza || '';
   document.getElementById('pag-data').value = new Date().toISOString().split('T')[0];
   document.getElementById('pag-metodo').value = 'contanti';
   document.getElementById('pag-ricevuta').value = '';
@@ -5925,9 +5925,11 @@ async function salvaPagamento() {
     if (errRpc) throw new Error(errRpc.message);
 
     // Aggiorna pagamento
+    const nuovaScadenza = document.getElementById('pag-scadenza').value || null;
     const { error } = await sb.from('pagamento').update({
       pagato: true,
       data_pagamento: data,
+      data_scadenza: nuovaScadenza,
       metodo: metodo,
       numero_ricevuta: numRicevuta,
       note: document.getElementById('pag-note').value.trim() || null,
@@ -8602,8 +8604,11 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
       <div style="background:var(--bg3);border-radius:var(--radius);padding:12px 14px;margin-bottom:20px;font-size:13px;">
         <strong>Atleta:</strong> <span id="pag-atleta-nome">—</span><br>
         <strong>Tipo:</strong> <span id="pag-tipo-label">—</span><br>
-        <strong>Importo:</strong> <span id="pag-importo-label" style="font-family:var(--mono);font-weight:600;color:var(--accent)">—</span><br>
-        <strong>Scadenza:</strong> <span id="pag-scadenza-label">—</span>
+        <strong>Importo:</strong> <span id="pag-importo-label" style="font-family:var(--mono);font-weight:600;color:var(--accent)">—</span>
+      </div>
+      <div class="field">
+        <label>Data di adempimento (scadenza)</label>
+        <input type="date" id="pag-scadenza">
       </div>
       <div class="field">
         <label>Data pagamento *</label>
@@ -8613,9 +8618,8 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
         <label>Metodo di pagamento *</label>
         <select id="pag-metodo">
           <option value="contanti">Contanti</option>
-          <option value="bonifico">Bonifico bancario</option>
-          <option value="pos">POS / Carta</option>
-          <option value="altro">Altro</option>
+          <option value="bonifico">Bonifico</option>
+          <option value="carta">Carta</option>
         </select>
       </div>
       <div class="field">
