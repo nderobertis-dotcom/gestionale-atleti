@@ -2207,7 +2207,7 @@ async function caricaAbbonamentiDashboard() {
       + '<div style="flex:1;min-width:0">'
       + '<div style="font-weight:600;font-size:14px">' + (s.tipo?.toUpperCase()||'') + ' ' + s.nome + '</div>'
       + '<div style="font-size:12px;color:var(--text3);margin-top:2px">'
-      + (ab ? (statoIcon[ab.stato]||'') + ' ' + ab.stato + ' · crediti: ' + liberi + '/' + ab.crediti_totali : '⚠ Nessun abbonamento')
+      + (ab ? (statoIcon[ab.stato]||'') + ' ' + ab.stato + ' · usati: ' + ab.crediti_usati + '/' + ab.crediti_totali + ' · liberi: ' + liberi : '⚠ Nessun abbonamento')
       + '</div>'
       + (ab ? '<div style="width:100%;background:var(--bg3);border-radius:100px;height:4px;margin-top:6px;overflow:hidden"><div style="width:' + perc + '%;height:100%;background:' + colore + ';border-radius:100px"></div></div>' : '')
       + '</div>'
@@ -4952,6 +4952,20 @@ async function salvaAtleta() {
         intestato_cf: intestatoCf,
         intestato_nome: intestatoNome,
       });
+
+      // Incrementa crediti_usati sull'abbonamento della società
+      if (maSocieta) {
+        const { data: ab } = await sb.from('abbonamento')
+          .select('id, crediti_usati, crediti_totali')
+          .eq('societa_id', maSocieta)
+          .eq('stato', 'attivo')
+          .maybeSingle();
+        if (ab && ab.crediti_usati < ab.crediti_totali) {
+          await sb.from('abbonamento')
+            .update({ crediti_usati: ab.crediti_usati + 1 })
+            .eq('id', ab.id);
+        }
+      }
     }
 
     // 3. Genitori (se minorenne)
