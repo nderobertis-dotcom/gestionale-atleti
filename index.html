@@ -758,6 +758,26 @@ tbody tr:last-child { border-bottom: none; }
     </div>
   </div>
 
+  <!-- BOX RESET PASSWORD (da link recovery) -->
+  <div class="login-box" id="box-nuova-password" style="display:none">
+    <div class="login-logo">
+      <img src="./logo_tesserato_club.png" alt="Tesserato.club" class="logo-img">
+      <span>tesserato.club</span>
+    </div>
+    <h2>Imposta nuova password</h2>
+    <p>Scegli una nuova password per il tuo account</p>
+    <div class="login-error" id="nuova-pwd-error"></div>
+    <div class="field">
+      <label>Nuova password *</label>
+      <input type="password" id="nuova-pwd" placeholder="Minimo 8 caratteri" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label>Conferma password *</label>
+      <input type="password" id="nuova-pwd-confirm" placeholder="Ripeti la password" autocomplete="new-password">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="salvaNuovaPassword()">✅ Salva nuova password</button>
+  </div>
+
   <div class="login-box" id="login-box">
     <div class="login-logo">
       <img src="./logo_tesserato_club.png" alt="Tesserato.club" class="logo-img">
@@ -4496,6 +4516,22 @@ async function caricaCreditiProfilo() {
 // ============================================================
 // AUTH
 // ============================================================
+async function salvaNuovaPassword() {
+  const pwd = document.getElementById('nuova-pwd').value;
+  const pwd2 = document.getElementById('nuova-pwd-confirm').value;
+  const errEl = document.getElementById('nuova-pwd-error');
+  errEl.textContent = '';
+  if (pwd.length < 8) { errEl.textContent = 'La password deve essere di almeno 8 caratteri.'; return; }
+  if (pwd !== pwd2) { errEl.textContent = 'Le password non coincidono.'; return; }
+  const { error } = await sb.auth.updateUser({ password: pwd });
+  if (error) { errEl.textContent = 'Errore: ' + error.message; return; }
+  document.getElementById('box-nuova-password').style.display = 'none';
+  document.getElementById('login-box').style.display = 'block';
+  document.getElementById('login-error').style.display = 'none';
+  toast('Password aggiornata! Accedi con le nuove credenziali.', 'success');
+  await sb.auth.signOut();
+}
+
 function toggleLoginPassword(btn) {
   const inp = document.getElementById('login-password');
   const isHidden = inp.type === 'password';
@@ -8254,6 +8290,22 @@ document.getElementById('btn-nuova-tariffa')?.addEventListener('click', apriModa
 // AVVIO: controlla sessione esistente
 // ============================================================
 (async () => {
+  // Controlla se è un recovery flow (link reset password)
+  const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
+  if (hashParams.get('type') === 'recovery' && hashParams.get('access_token')) {
+    // Imposta la sessione dal token recovery
+    const { data: { session }, error } = await sb.auth.setSession({
+      access_token: hashParams.get('access_token'),
+      refresh_token: hashParams.get('refresh_token') || '',
+    });
+    if (session) {
+      // Mostra form cambio password
+      document.getElementById('login-box').style.display = 'none';
+      document.getElementById('box-nuova-password').style.display = 'block';
+    }
+    return;
+  }
+
   // Prima controlla se c'è un token invito nell'URL
   const tokenRilevato = await verificaTokenInvito();
   if (!tokenRilevato) {
