@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tesserato.club — Manutenzione</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: #f7f8fc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: #0a0e1a;
+}
+.box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 48px 40px;
+  text-align: center;
+  max-width: 420px;
+  box-shadow: 0 4px 24px rgba(10,14,26,0.08);
+}
+.logo { font-size: 48px; margin-bottom: 16px; }
+h1 { font-size: 22px; font-weight: 600; margin-bottom: 12px; }
+p { color: #5a6278; font-size: 15px; line-height: 1.6; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; margin-right: 8px; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.status { display: flex; align-items: center; justify-content: center; margin-top: 24px; font-size: 13px; color: #7b82a0; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">🔧</div>
+  <h1>Manutenzione in corso</h1>
+  <p>La piattaforma è temporaneamente offline per aggiornamenti. Torneremo online a breve.</p>
+  <div class="status"><span class="dot"></span> Lavori in corso</div>
+</div>
+</body>
+</html>
